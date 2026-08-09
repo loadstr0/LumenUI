@@ -2451,6 +2451,7 @@ Name = "list",
 BackgroundTransparency = 1,
 AutomaticSize = Enum.AutomaticSize.X,
 Size = UDim2.fromOffset(0, 40),
+LayoutOrder = 2,
 }, {
 new("UIListLayout", {
 FillDirection = Enum.FillDirection.Horizontal,
@@ -2459,22 +2460,48 @@ SortOrder = Enum.SortOrder.LayoutOrder,
 }),
 })
 
+local menuSearchBox = new("TextBox", {
+Name = "search",
+Text = "",
+PlaceholderText = "Search tabs...",
+PlaceholderColor3 = Theme.TextMuted,
+ClearTextOnFocus = false,
+BackgroundColor3 = Theme.Surface,
+BackgroundTransparency = 0.3,
+FontFace = Theme.CustomFont,
+TextSize = 13,
+TextColor3 = Theme.Text,
+TextXAlignment = Enum.TextXAlignment.Left,
+Size = UDim2.fromOffset(200, 30),
+LayoutOrder = 1,
+}, {
+corner(Theme.CornerRadius),
+new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
+})
+
 local menuScale = new("UIScale", { Scale = 0.5 })
+
 local menuPopup = panel("ImageLabel", {
 Name = "popup",
 ImageTransparency = 1,
-AutomaticSize = Enum.AutomaticSize.X,
-Size = UDim2.fromOffset(0, 64),
+AutomaticSize = Enum.AutomaticSize.XY,
+Size = UDim2.fromOffset(0, 0),
 Position = UDim2.new(0.5, 0, 1, -70),
 AnchorPoint = Vector2.new(0.5, 1),
 }, {
 menuScale,
+new("UIListLayout", {
+SortOrder = Enum.SortOrder.LayoutOrder,
+Padding = UDim.new(0, 10),
+HorizontalAlignment = Enum.HorizontalAlignment.Center,
+}),
 new("UIPadding", {
 PaddingTop = UDim.new(0, 12),
 PaddingBottom = UDim.new(0, 12),
 PaddingLeft = UDim.new(0, 12),
 PaddingRight = UDim.new(0, 12),
 }),
+menuSearchBox,
 menuList,
 })
 
@@ -2576,6 +2603,7 @@ MenuList = menuList,
 MenuPopup = menuPopup,
 MenuScale = menuScale,
 MenuBackdrop = menuBackdrop,
+MenuSearchBox = menuSearchBox,
 Tabs = {},
 TabOrder = 0,
 ActiveTab = nil,
@@ -2590,6 +2618,13 @@ Connections = {},
 }, Window)
 
 self:_wireChrome(handle, controls, resizeButton, resizeDisabled, fullscreenButton, fullscreenIcon, resizeHandle, menuButton, menuBackdrop, layer, maxSize)
+
+menuSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+local query = menuSearchBox.Text:lower()
+for _, tab in pairs(self.Tabs) do
+tab.NavButton.Visible = query == "" or (tab.Title or ""):lower():find(query, 1, true) ~= nil
+end
+end)
 
 if options.ToggleKeybind then
 self:_track(UserInputService.InputBegan:Connect(function(input, processed)
