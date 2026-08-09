@@ -217,6 +217,17 @@ Thickness = thickness or 1,
 })
 end
 
+function Helpers.glowStroke(thickness)
+local gradient = Helpers.new("UIGradient", {
+Transparency = NumberSequence.new({
+NumberSequenceKeypoint.new(0, 0.69375),
+NumberSequenceKeypoint.new(1, 0.86875),
+}),
+Rotation = 80,
+})
+return { Helpers.stroke(Theme.Glow, thickness), gradient }
+end
+
 function Helpers.setOwnCorner(root, radius)
 local existing = root:FindFirstChildOfClass("UICorner")
 if existing then
@@ -569,6 +580,7 @@ Position = value and UDim2.fromOffset(32, 12) or UDim2.fromOffset(12, 12),
 Size = UDim2.fromOffset(18, 18),
 }, { corner(Theme.CornerRadiusPill) })
 
+local switchGlow = Helpers.glowStroke(1)
 local switch = new("Frame", {
 Name = "switch",
 BackgroundColor3 = value and Theme.SurfaceRaised or Theme.Surface,
@@ -576,7 +588,7 @@ BackgroundTransparency = value and 0.05 or 0.35,
 AnchorPoint = Vector2.new(1, 0.5),
 Position = UDim2.new(1, 0, 0.5, 0),
 Size = UDim2.fromOffset(switchWidth, 24),
-}, { corner(Theme.CornerRadiusPill), Helpers.stroke(Theme.Glow, 1), knob })
+}, { corner(Theme.CornerRadiusPill), switchGlow[1], switchGlow[2], knob })
 
 local hitbox = surface("ImageButton", {
 Name = "toggle",
@@ -833,6 +845,7 @@ TextColor3 = Theme.Text,
 Size = UDim2.fromScale(1, 1),
 })
 
+local keyBadgeGlow = Helpers.glowStroke(1)
 local keyBadge = new("TextButton", {
 Name = "keybind",
 Text = "",
@@ -841,7 +854,7 @@ BackgroundTransparency = 0.3,
 AnchorPoint = Vector2.new(1, 0.5),
 Position = UDim2.new(1, 0, 0.5, 0),
 Size = UDim2.fromOffset(badgeWidth, 26),
-}, { corner(Theme.CornerRadiusPill), Helpers.stroke(Theme.Glow, 1), keyLabel })
+}, { corner(Theme.CornerRadiusPill), keyBadgeGlow[1], keyBadgeGlow[2], keyLabel })
 
 local hitbox = surface("Frame", {
 Name = "keybind_row",
@@ -901,6 +914,378 @@ end
 
 function api:Get()
 return value
+end
+
+return api
+end
+
+function Elements:Divider(options)
+options = options or {}
+local hasTitle = options.Title ~= nil and options.Title ~= ""
+
+local titleLabel = new("TextLabel", {
+Name = "title",
+Visible = hasTitle,
+BackgroundTransparency = 1,
+Text = options.Title or "",
+FontFace = Theme.CustomFontMedium,
+TextSize = 12,
+TextColor3 = Theme.TextMuted,
+TextXAlignment = Enum.TextXAlignment.Left,
+Size = UDim2.new(1, 0, 0, hasTitle and 16 or 0),
+LayoutOrder = 1,
+})
+
+local line = new("Frame", {
+Name = "line",
+BackgroundColor3 = Theme.TextMuted,
+BackgroundTransparency = 0.8,
+BorderSizePixel = 0,
+Size = UDim2.new(1, 0, 0, 1),
+LayoutOrder = 2,
+})
+
+local container = new("Frame", {
+Name = "divider",
+BackgroundTransparency = 1,
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = self:_nextOrder(),
+}, {
+new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4) }),
+new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }),
+titleLabel,
+line,
+})
+container.Parent = self.Page
+
+return {
+Destroy = function()
+container:Destroy()
+end,
+}
+end
+
+function Elements:Input(options)
+options = options or {}
+local hasIcon = options.Icon ~= nil and options.Icon ~= ""
+local textOffset = hasIcon and 32 or 0
+local boxWidth = 140
+
+local icon = new("ImageLabel", Helpers.withIcon({
+Name = "icon",
+BackgroundTransparency = 1,
+Visible = hasIcon,
+ImageColor3 = Theme.Text,
+ImageTransparency = 0.2,
+ScaleType = Enum.ScaleType.Fit,
+Size = UDim2.fromOffset(20, 20),
+Position = UDim2.fromOffset(0, 0),
+}, options.Icon, 48))
+
+local titleLabel = new("TextLabel", {
+Name = "title",
+BackgroundTransparency = 1,
+Text = options.Title or "",
+FontFace = Theme.CustomFontMedium,
+TextSize = 14,
+TextColor3 = Theme.Text,
+TextXAlignment = Enum.TextXAlignment.Left,
+Position = UDim2.fromOffset(textOffset, 0),
+Size = UDim2.new(1, -textOffset - boxWidth - 12, 0, 18),
+})
+
+local descLabel = new("TextLabel", {
+Name = "desc",
+BackgroundTransparency = 1,
+Text = options.Desc or "",
+Visible = options.Desc ~= nil and options.Desc ~= "",
+FontFace = Theme.CustomFont,
+TextSize = 13,
+TextColor3 = Theme.TextMuted,
+TextXAlignment = Enum.TextXAlignment.Left,
+TextWrapped = true,
+Position = UDim2.fromOffset(textOffset, 20),
+Size = UDim2.new(1, -textOffset - boxWidth - 12, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+})
+
+local inputGlow = Helpers.glowStroke(1)
+local textBox = new("TextBox", {
+Name = "input",
+Text = options.Value or "",
+PlaceholderText = options.Placeholder or "",
+PlaceholderColor3 = Theme.TextMuted,
+ClearTextOnFocus = false,
+BackgroundColor3 = Theme.Surface,
+BackgroundTransparency = 0.3,
+FontFace = Theme.CustomFont,
+TextSize = 13,
+TextColor3 = Theme.Text,
+TextXAlignment = Enum.TextXAlignment.Left,
+AnchorPoint = Vector2.new(1, 0.5),
+Position = UDim2.new(1, 0, 0.5, 0),
+Size = UDim2.fromOffset(boxWidth, 30),
+}, {
+corner(Theme.CornerRadius),
+inputGlow[1],
+inputGlow[2],
+new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
+})
+
+local container = surface("Frame", {
+Name = "input_row",
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = self:_nextOrder(),
+}, {
+new("UIPadding", {
+PaddingTop = UDim.new(0, 10),
+PaddingBottom = UDim.new(0, 10),
+PaddingLeft = UDim.new(0, 12),
+PaddingRight = UDim.new(0, 12),
+}),
+icon,
+titleLabel,
+descLabel,
+textBox,
+})
+container.Parent = self.Page
+
+textBox.FocusLost:Connect(function(enterPressed)
+if type(options.Callback) == "function" then
+options.Callback(textBox.Text, enterPressed)
+end
+end)
+
+local api = {}
+
+function api:Set(newValue)
+textBox.Text = newValue or ""
+end
+
+function api:Get()
+return textBox.Text
+end
+
+return api
+end
+
+function Elements:Dropdown(options)
+options = options or {}
+local choices = options.Options or {}
+local value = options.Value
+local hasIcon = options.Icon ~= nil and options.Icon ~= ""
+local textOffset = hasIcon and 32 or 0
+local boxWidth = 140
+local open = false
+
+local icon = new("ImageLabel", Helpers.withIcon({
+Name = "icon",
+BackgroundTransparency = 1,
+Visible = hasIcon,
+ImageColor3 = Theme.Text,
+ImageTransparency = 0.2,
+ScaleType = Enum.ScaleType.Fit,
+Size = UDim2.fromOffset(20, 20),
+Position = UDim2.fromOffset(0, 0),
+}, options.Icon, 48))
+
+local titleLabel = new("TextLabel", {
+Name = "title",
+BackgroundTransparency = 1,
+Text = options.Title or "",
+FontFace = Theme.CustomFontMedium,
+TextSize = 14,
+TextColor3 = Theme.Text,
+TextXAlignment = Enum.TextXAlignment.Left,
+Position = UDim2.fromOffset(textOffset, 0),
+Size = UDim2.new(1, -textOffset - boxWidth - 12, 0, 18),
+})
+
+local descLabel = new("TextLabel", {
+Name = "desc",
+BackgroundTransparency = 1,
+Text = options.Desc or "",
+Visible = options.Desc ~= nil and options.Desc ~= "",
+FontFace = Theme.CustomFont,
+TextSize = 13,
+TextColor3 = Theme.TextMuted,
+TextXAlignment = Enum.TextXAlignment.Left,
+TextWrapped = true,
+Position = UDim2.fromOffset(textOffset, 20),
+Size = UDim2.new(1, -textOffset - boxWidth - 12, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+})
+
+local chevron = new("ImageLabel", Helpers.withIcon({
+Name = "chevron",
+BackgroundTransparency = 1,
+ImageColor3 = Theme.TextMuted,
+ScaleType = Enum.ScaleType.Fit,
+AnchorPoint = Vector2.new(1, 0.5),
+Position = UDim2.new(1, -8, 0.5, 0),
+Size = UDim2.fromOffset(14, 14),
+}, "chevron-down", 48))
+
+local selectedLabel = new("TextLabel", {
+Name = "selected",
+BackgroundTransparency = 1,
+Text = value or "Select...",
+FontFace = Theme.CustomFont,
+TextSize = 13,
+TextColor3 = value and Theme.Text or Theme.TextMuted,
+TextXAlignment = Enum.TextXAlignment.Left,
+TextTruncate = Enum.TextTruncate.AtEnd,
+Size = UDim2.new(1, -30, 1, 0),
+Position = UDim2.fromOffset(8, 0),
+})
+
+local selectorGlow = Helpers.glowStroke(1)
+local selector = new("TextButton", {
+Name = "selector",
+Text = "",
+BackgroundColor3 = Theme.Surface,
+BackgroundTransparency = 0.3,
+AnchorPoint = Vector2.new(1, 0.5),
+Position = UDim2.new(1, 0, 0.5, 0),
+Size = UDim2.fromOffset(boxWidth, 30),
+}, { corner(Theme.CornerRadius), selectorGlow[1], selectorGlow[2], selectedLabel, chevron })
+
+local optionsListScale = new("UIScale", { Scale = 0.9 })
+local optionsList = new("CanvasGroup", {
+Name = "options",
+Visible = false,
+GroupTransparency = 1,
+BackgroundColor3 = Theme.Surface,
+BackgroundTransparency = 0.3,
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = 2,
+}, {
+optionsListScale,
+corner(Theme.CornerRadius),
+new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
+new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }),
+})
+
+local row = new("Frame", {
+Name = "row",
+BackgroundTransparency = 1,
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = 1,
+}, { icon, titleLabel, descLabel, selector })
+
+local container = surface("Frame", {
+Name = "dropdown",
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = self:_nextOrder(),
+}, {
+new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
+new("UIPadding", {
+PaddingTop = UDim.new(0, 10),
+PaddingBottom = UDim.new(0, 10),
+PaddingLeft = UDim.new(0, 12),
+PaddingRight = UDim.new(0, 12),
+}),
+row,
+optionsList,
+})
+container.Parent = self.Page
+
+local optionButtons = {}
+
+local function setOpen(newOpen)
+open = newOpen
+TweenService:Create(chevron, Theme.Tweens.Fast, { Rotation = open and 180 or 0 }):Play()
+if open then
+optionsList.Visible = true
+TweenService:Create(optionsList, Theme.Tweens.PanelOpen, { GroupTransparency = 0 }):Play()
+TweenService:Create(optionsListScale, Theme.Tweens.PanelOpen, { Scale = 1 }):Play()
+else
+TweenService:Create(optionsList, Theme.Tweens.PanelClose, { GroupTransparency = 1 }):Play()
+TweenService:Create(optionsListScale, Theme.Tweens.PanelClose, { Scale = 0.9 }):Play()
+task.delay(Theme.Tweens.PanelClose.Time, function()
+if not open then
+optionsList.Visible = false
+end
+end)
+end
+end
+
+local function select(choice, fromUser)
+value = choice
+selectedLabel.Text = value or "Select..."
+selectedLabel.TextColor3 = value and Theme.Text or Theme.TextMuted
+setOpen(false)
+if fromUser and type(options.Callback) == "function" then
+options.Callback(value)
+end
+end
+
+local function buildOptions()
+for _, button in ipairs(optionButtons) do
+button:Destroy()
+end
+table.clear(optionButtons)
+for i, choice in ipairs(choices) do
+local optionButton = new("TextButton", {
+Name = "option",
+Text = "",
+BackgroundTransparency = 1,
+Size = UDim2.new(1, 0, 0, 28),
+LayoutOrder = i,
+}, {
+new("TextLabel", {
+Name = "label",
+BackgroundTransparency = 1,
+Text = choice,
+FontFace = Theme.CustomFont,
+TextSize = 13,
+TextColor3 = choice == value and Theme.Text or Theme.TextMuted,
+TextXAlignment = Enum.TextXAlignment.Left,
+Size = UDim2.new(1, -16, 1, 0),
+Position = UDim2.fromOffset(8, 0),
+}),
+})
+optionButton.Parent = optionsList
+optionButton.MouseEnter:Connect(function()
+TweenService:Create(optionButton, Theme.Tweens.Fast, { BackgroundTransparency = 0.7 }):Play()
+end)
+optionButton.MouseLeave:Connect(function()
+TweenService:Create(optionButton, Theme.Tweens.Fast, { BackgroundTransparency = 1 }):Play()
+end)
+optionButton.MouseButton1Click:Connect(function()
+select(choice, true)
+end)
+table.insert(optionButtons, optionButton)
+end
+end
+
+buildOptions()
+
+selector.MouseButton1Click:Connect(function()
+setOpen(not open)
+end)
+
+local api = {}
+
+function api:Set(newValue)
+select(newValue, false)
+end
+
+function api:Get()
+return value
+end
+
+function api:SetOptions(newChoices)
+choices = newChoices or {}
+if value and not table.find(choices, value) then
+select(nil, false)
+end
+buildOptions()
 end
 
 return api
@@ -1045,6 +1430,7 @@ Position = UDim2.new(0, 0, 0.5, 0),
 ZIndex = 3,
 }, { handleGlow })
 
+local trackGlow = Helpers.glowStroke(1)
 local track = new("TextButton", {
 Name = "track",
 Text = "",
@@ -1052,7 +1438,7 @@ BackgroundColor3 = Color3.new(0, 0, 0),
 BackgroundTransparency = 0.7,
 Size = UDim2.new(1, 0, 0, Theme.Slider.TrackHeight),
 LayoutOrder = 2,
-}, { corner(Theme.CornerRadiusPill), Helpers.stroke(Theme.Glow, 1), depth, fill, minLabel, maxLabel, handle })
+}, { corner(Theme.CornerRadiusPill), trackGlow[1], trackGlow[2], depth, fill, minLabel, maxLabel, handle })
 
 local container = surface("Frame", {
 Name = "slider",

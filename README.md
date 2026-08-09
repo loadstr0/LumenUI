@@ -5,7 +5,7 @@ A dark, monochrome Roblox UI library — window chrome, tabs, form elements, dia
 ## Features
 
 - **Window** — draggable/resizable chrome, fullscreen toggle, a popup nav menu (not a sidebar), a "welcome back" splash intro on open, and automatic cleanup of any previous LumenUI window (and its keybinds) if the loadstring is re-run in the same session.
-- **Elements** — `Paragraph`, `Button`, `Toggle`, `Section` + `Card` (icon grid), `Slider`, `Keybind`.
+- **Elements** — `Paragraph`, `Button`, `Toggle`, `Section` + `Card` (icon grid), `Slider`, `Keybind`, `Dropdown`, `Input`, `Divider`.
 - **Confirm** — a blocking confirmation dialog (`title`, `content`, `callback`).
 - **Notify** — dismissible toast notifications with icon + auto-dismiss duration.
 - **Icons** — built-in [Lucide](https://lucide.dev) icon resolver (`Helpers.icon` / `Helpers.withIcon`), used by name (`"home"`, `"settings"`, …) with automatic fallback for unknown names.
@@ -84,6 +84,30 @@ local keybind = home:Keybind({
 })
 -- keybind:Set(Enum.KeyCode.G) -- set programmatically without firing Callback
 
+home:Divider({ Title = "More options" }) -- Title is optional, a plain line if omitted
+
+local input = home:Input({
+    Title = "Username",
+    Desc = "Committed on Enter or clicking away.",
+    Icon = "user",
+    Placeholder = "Enter text...",
+    Callback = function(text, enterPressed)
+        print("Input:", text, enterPressed)
+    end,
+})
+-- input:Set("preset value") -- set programmatically without firing Callback
+
+local dropdown = home:Dropdown({
+    Title = "Map",
+    Desc = "Pick one from the list.",
+    Icon = "map",
+    Options = { "Kyoto", "Kawasaki", "Kasamatsu" },
+    Callback = function(value)
+        print("Selected:", value)
+    end,
+})
+-- dropdown:SetOptions({ "New", "List" }) -- replaces the choices, clearing selection if stale
+
 local section = home:Section({
     Title = "Quick Actions",
     Desc = "A row of icon cards.",
@@ -125,6 +149,9 @@ Every tab returned by `window:Tab(...)` exposes:
 | `tab:Toggle(options)` | `Title`, `Desc`, `Icon`, `Value`, `Callback(value)` — returns `{ Set(self, value) }` |
 | `tab:Slider(options)` | `Title`, `Desc`, `Min`, `Max`, `Increment`, `Value`, `Callback(value)` — returns `{ Set(self, value), Get(self) }` |
 | `tab:Keybind(options)` | `Title`, `Desc`, `Icon`, `Value` (`Enum.KeyCode`), `Callback(key)` — `Callback` fires when the *bound* key is pressed, not on rebind; click the badge to rebind, Escape cancels. Returns `{ Set(self, key), Get(self) }` |
+| `tab:Dropdown(options)` | `Title`, `Desc`, `Icon`, `Options` (array of strings), `Value` (initial selection), `Callback(value)` — returns `{ Set(self, value), Get(self), SetOptions(self, newOptions) }` |
+| `tab:Input(options)` | `Title`, `Desc`, `Icon`, `Placeholder`, `Value` (initial text), `Callback(text, enterPressed)` — fires on `FocusLost` (Enter or clicking away), not every keystroke. Returns `{ Set(self, text), Get(self) }` |
+| `tab:Divider(options?)` | `Title` (optional) — a thin rule for breaking a tab into visual groups |
 | `tab:Section(options)` | `Title`, `Desc` — returns a section with `:Card(cardOptions)` |
 | `section:Card(cardOptions)` | `Title`, `Icon`, `Callback()` |
 
