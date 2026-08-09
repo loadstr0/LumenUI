@@ -1026,6 +1026,7 @@ TextSize = 14,
 TextColor3 = Theme.Text,
 TextXAlignment = Enum.TextXAlignment.Left,
 Size = UDim2.new(1, 0, 0, 16),
+LayoutOrder = 1,
 })
 
 local contentLabel = new("TextLabel", {
@@ -1039,7 +1040,7 @@ TextXAlignment = Enum.TextXAlignment.Left,
 TextWrapped = true,
 Size = UDim2.new(1, 0, 0, 0),
 AutomaticSize = Enum.AutomaticSize.Y,
-Position = UDim2.fromOffset(0, 18),
+LayoutOrder = 2,
 })
 
 local timelineBar = new("ImageLabel", {
@@ -1059,8 +1060,8 @@ Image = "rbxassetid://16294678871",
 ImageTransparency = 0.8,
 ScaleType = Enum.ScaleType.Slice,
 SliceCenter = Rect.new(206, 206, 206, 206),
-Size = UDim2.new(1, -24, 0, 3),
-Position = UDim2.new(0, 12, 1, -8),
+Size = UDim2.new(1, 0, 0, 3),
+LayoutOrder = 3,
 }, { timelineBar })
 
 local strokeGradient = new("UIGradient", {
@@ -1089,6 +1090,11 @@ PaddingTop = UDim.new(0, 12),
 PaddingBottom = UDim.new(0, 16),
 PaddingLeft = UDim.new(0, 16),
 PaddingRight = UDim.new(0, 16),
+}),
+
+new("UIListLayout", {
+SortOrder = Enum.SortOrder.LayoutOrder,
+Padding = UDim.new(0, 8),
 }),
 titleLabel,
 contentLabel,
