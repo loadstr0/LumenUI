@@ -1010,7 +1010,6 @@ Size = UDim2.new(1, -textOffset - boxWidth - 12, 0, 0),
 AutomaticSize = Enum.AutomaticSize.Y,
 })
 
-local inputGlow = Helpers.glowStroke(1)
 local textBox = new("TextBox", {
 Name = "input",
 Text = options.Value or "",
@@ -1028,8 +1027,6 @@ Position = UDim2.new(1, 0, 0.5, 0),
 Size = UDim2.fromOffset(boxWidth, 30),
 }, {
 corner(Theme.CornerRadius),
-inputGlow[1],
-inputGlow[2],
 new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
 })
 
@@ -1338,7 +1335,6 @@ Size = UDim2.new(1, -textOffset - swatchWidth - 12, 0, 0),
 AutomaticSize = Enum.AutomaticSize.Y,
 })
 
-local swatchGlow = Helpers.glowStroke(1)
 local swatch = new("TextButton", {
 Name = "swatch",
 Text = "",
@@ -1346,7 +1342,7 @@ BackgroundColor3 = color,
 AnchorPoint = Vector2.new(1, 0.5),
 Position = UDim2.new(1, 0, 0.5, 0),
 Size = UDim2.fromOffset(swatchWidth, 30),
-}, { corner(Theme.CornerRadius), swatchGlow[1], swatchGlow[2] })
+}, { corner(Theme.CornerRadius), Helpers.stroke(Theme.Glow, 1) })
 
 local row = new("Frame", {
 Name = "row",
@@ -2255,6 +2251,7 @@ Name = options.Name or "LumenUI",
 ResetOnSpawn = false,
 ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 DisplayOrder = 100,
+IgnoreGuiInset = true,
 Parent = safeUiParent(),
 })
 

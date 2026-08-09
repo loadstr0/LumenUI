@@ -128,7 +128,10 @@ section:Card({
     Icon = "refresh-cw",
     Callback = function()
         window:Confirm("Restart?", "This will restart the hub.", function()
-            -- confirmed
+            -- Window.new() automatically destroys the previous window (and disconnects its
+            -- keybinds/dragging/etc.) the moment it runs - no need to call window:Destroy()
+            -- yourself first. See "Called automatically on the previous window..." above.
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/loadstr0/LumenUI/main/Loader.lua"))()
         end)
     end,
 })
