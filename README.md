@@ -4,8 +4,8 @@ A dark, monochrome Roblox UI library — window chrome, tabs, form elements, dia
 
 ## Features
 
-- **Window** — draggable/resizable chrome, fullscreen toggle, a popup nav menu (not a sidebar), and a "welcome back" splash intro on open.
-- **Elements** — `Paragraph`, `Button`, `Toggle`, `Section` + `Card` (icon grid), `Slider`.
+- **Window** — draggable/resizable chrome, fullscreen toggle, a popup nav menu (not a sidebar), a "welcome back" splash intro on open, and automatic cleanup of any previous LumenUI window (and its keybinds) if the loadstring is re-run in the same session.
+- **Elements** — `Paragraph`, `Button`, `Toggle`, `Section` + `Card` (icon grid), `Slider`, `Keybind`.
 - **Confirm** — a blocking confirmation dialog (`title`, `content`, `callback`).
 - **Notify** — dismissible toast notifications with icon + auto-dismiss duration.
 - **Icons** — built-in [Lucide](https://lucide.dev) icon resolver (`Helpers.icon` / `Helpers.withIcon`), used by name (`"home"`, `"settings"`, …) with automatic fallback for unknown names.
@@ -73,6 +73,17 @@ home:Slider({
     end,
 })
 
+local keybind = home:Keybind({
+    Title = "Fire action",
+    Desc = "Click the key badge to rebind, Escape cancels.",
+    Icon = "keyboard",
+    Value = Enum.KeyCode.F,
+    Callback = function(key)
+        print("Bound key pressed:", key.Name)
+    end,
+})
+-- keybind:Set(Enum.KeyCode.G) -- set programmatically without firing Callback
+
 local section = home:Section({
     Title = "Quick Actions",
     Desc = "A row of icon cards.",
@@ -101,7 +112,7 @@ section:Card({
 | `window:ToggleMenu(forceState?)` | Opens/closes the nav popup; pass `true`/`false` to force a state. |
 | `window:Notify(title, content, icon?, duration?)` | Shows a toast. |
 | `window:Confirm(title, content, callback)` | Shows a confirmation dialog; `callback` runs on confirm. |
-| `window:Destroy()` | Tears down the window and disconnects everything. |
+| `window:Destroy()` | Tears down the window and disconnects everything (including every `tab:Keybind`). Called automatically on the previous window if you re-run the loadstring in the same session - no stacked windows or leaked keybinds across reloads. |
 
 ### Tab elements
 
@@ -112,7 +123,8 @@ Every tab returned by `window:Tab(...)` exposes:
 | `tab:Paragraph(options)` | `Title`, `Desc` |
 | `tab:Button(options)` | `Title`, `Desc`, `Icon`, `Callback()` |
 | `tab:Toggle(options)` | `Title`, `Desc`, `Icon`, `Value`, `Callback(value)` — returns `{ Set(self, value) }` |
-| `tab:Slider(options)` | `Title`, `Desc`, `Min`, `Max`, `Increment`, `Value`, `Callback(value)` |
+| `tab:Slider(options)` | `Title`, `Desc`, `Min`, `Max`, `Increment`, `Value`, `Callback(value)` — returns `{ Set(self, value), Get(self) }` |
+| `tab:Keybind(options)` | `Title`, `Desc`, `Icon`, `Value` (`Enum.KeyCode`), `Callback(key)` — `Callback` fires when the *bound* key is pressed, not on rebind; click the badge to rebind, Escape cancels. Returns `{ Set(self, key), Get(self) }` |
 | `tab:Section(options)` | `Title`, `Desc` — returns a section with `:Card(cardOptions)` |
 | `section:Card(cardOptions)` | `Title`, `Icon`, `Callback()` |
 

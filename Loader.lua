@@ -777,6 +777,135 @@ end
 return section
 end
 
+function Elements:Keybind(options)
+options = options or {}
+local value = options.Value
+local hasIcon = options.Icon ~= nil and options.Icon ~= ""
+local textOffset = hasIcon and 32 or 0
+local badgeWidth = 90
+local listening = false
+
+local icon = new("ImageLabel", Helpers.withIcon({
+Name = "icon",
+BackgroundTransparency = 1,
+Visible = hasIcon,
+ImageColor3 = Theme.Text,
+ImageTransparency = 0.2,
+ScaleType = Enum.ScaleType.Fit,
+Size = UDim2.fromOffset(20, 20),
+Position = UDim2.fromOffset(0, 0),
+}, options.Icon, 48))
+
+local titleLabel = new("TextLabel", {
+Name = "title",
+BackgroundTransparency = 1,
+Text = options.Title or "",
+FontFace = Theme.CustomFontMedium,
+TextSize = 14,
+TextColor3 = Theme.Text,
+TextXAlignment = Enum.TextXAlignment.Left,
+Position = UDim2.fromOffset(textOffset, 0),
+Size = UDim2.new(1, -textOffset - badgeWidth - 12, 0, 18),
+})
+
+local descLabel = new("TextLabel", {
+Name = "desc",
+BackgroundTransparency = 1,
+Text = options.Desc or "",
+Visible = options.Desc ~= nil and options.Desc ~= "",
+FontFace = Theme.CustomFont,
+TextSize = 13,
+TextColor3 = Theme.TextMuted,
+TextXAlignment = Enum.TextXAlignment.Left,
+TextWrapped = true,
+Position = UDim2.fromOffset(textOffset, 20),
+Size = UDim2.new(1, -textOffset - badgeWidth - 12, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+})
+
+local keyLabel = new("TextLabel", {
+Name = "text",
+BackgroundTransparency = 1,
+Text = value and value.Name or "None",
+FontFace = Theme.CustomFontMedium,
+TextSize = 13,
+TextColor3 = Theme.Text,
+Size = UDim2.fromScale(1, 1),
+})
+
+local keyBadge = new("TextButton", {
+Name = "keybind",
+Text = "",
+BackgroundColor3 = Theme.SurfaceRaised,
+BackgroundTransparency = 0.3,
+AnchorPoint = Vector2.new(1, 0.5),
+Position = UDim2.new(1, 0, 0.5, 0),
+Size = UDim2.fromOffset(badgeWidth, 26),
+}, { corner(Theme.CornerRadiusPill), Helpers.stroke(Theme.Glow, 1), keyLabel })
+
+local hitbox = surface("Frame", {
+Name = "keybind_row",
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = self:_nextOrder(),
+}, {
+new("UIPadding", {
+PaddingTop = UDim.new(0, 10),
+PaddingBottom = UDim.new(0, 10),
+PaddingLeft = UDim.new(0, 12),
+PaddingRight = UDim.new(0, 12),
+}),
+icon,
+titleLabel,
+descLabel,
+keyBadge,
+})
+hitbox.Parent = self.Page
+
+keyBadge.MouseButton1Click:Connect(function()
+listening = true
+keyLabel.Text = "..."
+end)
+
+self.Window:_track(UserInputService.InputBegan:Connect(function(input, processed)
+if listening then
+if input.UserInputType ~= Enum.UserInputType.Keyboard then
+return
+end
+if input.KeyCode == Enum.KeyCode.Escape then
+listening = false
+keyLabel.Text = value and value.Name or "None"
+return
+end
+value = input.KeyCode
+keyLabel.Text = value.Name
+listening = false
+return
+end
+if processed then
+return
+end
+if value and input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == value then
+if type(options.Callback) == "function" then
+options.Callback(value)
+end
+end
+end))
+
+local api = {}
+
+function api:Set(newValue)
+value = newValue
+keyLabel.Text = value and value.Name or "None"
+end
+
+function api:Get()
+return value
+end
+
+return api
+end
+
 function Elements:Slider(options)
 options = options or {}
 local min = options.Min or 0
@@ -1414,8 +1543,20 @@ end)
 return button
 end
 
+local function destroyPreviousWindow()
+local ok, previous = pcall(function()
+return getgenv().LumenUIActiveWindow
+end)
+if ok and previous and type(previous.Destroy) == "function" then
+pcall(function()
+previous:Destroy()
+end)
+end
+end
+
 function Window.new(options)
 options = options or {}
+destroyPreviousWindow()
 
 local screenGui = new("ScreenGui", {
 Name = options.Name or "LumenUI",
@@ -1716,24 +1857,35 @@ MenuOpen = false,
 Visible = true,
 LastPosition = mainFrame.Position,
 LastSize = mainFrame.Size,
+
+Connections = {},
 }, Window)
 
 self:_wireChrome(handle, controls, resizeButton, resizeDisabled, fullscreenButton, fullscreenIcon, resizeHandle, menuButton, menuBackdrop, layer, maxSize)
 
 if options.ToggleKeybind then
-self.ToggleConnection = UserInputService.InputBegan:Connect(function(input, processed)
+self:_track(UserInputService.InputBegan:Connect(function(input, processed)
 if processed then
 return
 end
 if input.KeyCode == options.ToggleKeybind then
 self:SetVisible(not self.Visible)
 end
-end)
+end))
 end
 
 self:_playIntro({ titleLabel, tabLabel, handle, pagesContainer, menuButton, resizeHandle }, initialSize)
 
+pcall(function()
+getgenv().LumenUIActiveWindow = self
+end)
+
 return self
+end
+
+function Window:_track(connection)
+table.insert(self.Connections, connection)
+return connection
 end
 
 function Window:_wireChrome(handle, controls, resizeButton, resizeDisabled, fullscreenButton, fullscreenIcon, resizeHandle, menuButton, menuBackdrop, layer, maxSize)
@@ -2063,9 +2215,17 @@ if self.Destroyed then
 return
 end
 self.Destroyed = true
-if self.ToggleConnection then
-self.ToggleConnection:Disconnect()
+for _, connection in ipairs(self.Connections) do
+pcall(function()
+connection:Disconnect()
+end)
 end
+table.clear(self.Connections)
+pcall(function()
+if getgenv().LumenUIActiveWindow == self then
+getgenv().LumenUIActiveWindow = nil
+end
+end)
 self.Shadow:Destroy()
 self.ScreenGui:Destroy()
 end
