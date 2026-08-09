@@ -7,7 +7,7 @@ A dark, monochrome Roblox UI library — window chrome, tabs, form elements, dia
 - **Window** — draggable/resizable chrome, fullscreen toggle, a popup nav menu (not a sidebar), a "welcome back" splash intro on open, and automatic cleanup of any previous LumenUI window (and its keybinds) if the loadstring is re-run in the same session.
 - **Elements** — `Paragraph`, `Button`, `Toggle`, `Section` + `Card` (icon grid), `Slider`, `Keybind`, `Dropdown`, `Input`, `Divider`, `ColorPicker`.
 - **Confirm** — a blocking confirmation dialog (`title`, `content`, `callback`).
-- **Notify** — dismissible toast notifications with icon + auto-dismiss duration.
+- **Notify** — dismissible toast notifications with icon + auto-dismiss duration, same background as the main window (not a flat color fill), fading and sliding in/out. Multiple toasts stack newest-on-top and animate to a new slot whenever one is added or dismissed, instead of snapping.
 - **Icons** — built-in [Lucide](https://lucide.dev) icon resolver (`Helpers.icon` / `Helpers.withIcon`), used by name (`"home"`, `"settings"`, …) with automatic fallback for unknown names.
 - **Theme** — a single module of colors, fonts, corner radii, and `TweenInfo` presets; override any field to reskin the whole library.
 

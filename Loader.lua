@@ -1762,8 +1762,9 @@ container.Parent = self.Page
 
 local function render()
 local fraction = (value - min) / (max - min)
+
 TweenService:Create(handle, Theme.Tweens.Fast, {
-Position = UDim2.new(fraction, 0, 0.5, 0),
+Position = UDim2.new(fraction, -Theme.Slider.HandleSize / 2, 0.5, 0),
 }):Play()
 TweenService:Create(fill, Theme.Tweens.Fast, {
 Size = UDim2.fromScale(fraction, 1),
@@ -1827,9 +1828,13 @@ local TweenService = game:GetService("TweenService")
 
 local Theme = ctx:Require("Theme")
 local Helpers = ctx:Require("Helpers")
+local BulkFade = ctx:Require("BulkFade")
 local new, corner = Helpers.new, Helpers.corner
 
 local Notify = {}
+
+local GAP = 8
+local START_OFFSET = -80
 
 function Notify.Show(window, title, content, icon, duration)
 duration = duration or 5
@@ -1889,15 +1894,19 @@ NumberSequenceKeypoint.new(1, 0.86875),
 Rotation = 80,
 })
 
-local toast = new("Frame", {
+local toast = new("ImageButton", {
 Name = "toast",
-BackgroundColor3 = Theme.SurfaceRaised,
-BackgroundTransparency = 0.05,
+AutoButtonColor = false,
+BackgroundColor3 = Theme.Background,
+BackgroundTransparency = 0.1,
+Image = Theme.WindowBackgroundImage,
+ImageTransparency = 0.8,
+ScaleType = Enum.ScaleType.Crop,
+ClipsDescendants = true,
 Size = UDim2.new(1, 0, 0, 0),
 AutomaticSize = Enum.AutomaticSize.Y,
-Position = UDim2.new(0.5, 0, 0, -80),
+Position = UDim2.new(0.5, 0, 0, START_OFFSET),
 AnchorPoint = Vector2.new(0.5, 0),
-ClipsDescendants = true,
 }, {
 corner(Theme.CornerRadiusPill),
 Helpers.stroke(Theme.Glow, 1),
@@ -1908,7 +1917,6 @@ PaddingBottom = UDim.new(0, 16),
 PaddingLeft = UDim.new(0, 16),
 PaddingRight = UDim.new(0, 16),
 }),
-
 new("UIListLayout", {
 SortOrder = Enum.SortOrder.LayoutOrder,
 Padding = UDim.new(0, 8),
@@ -1924,14 +1932,38 @@ Name = "notifications",
 BackgroundTransparency = 1,
 Size = UDim2.new(0, 320, 1, 0),
 Position = UDim2.new(1, -336, 0, 16),
-}, {
-new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
 })
 window.NotifyContainer.Parent = window.ScreenGui
+window.NotifyToasts = {}
 end
+local toasts = window.NotifyToasts
 toast.Parent = window.NotifyContainer
+table.insert(toasts, 1, toast)
 
-TweenService:Create(toast, Theme.Tweens.Window, { Position = UDim2.new(0.5, 0, 0, 0) }):Play()
+local descendants = toast:GetDescendants()
+local openFade = BulkFade.CreateGroup(descendants, Theme.Tweens.Window)
+local openSnap = BulkFade.CreateGroup(descendants, TweenInfo.new(0))
+local closeFade = BulkFade.CreateGroup(descendants, Theme.Tweens.Window)
+
+local function relayout()
+local y = 0
+for _, t in ipairs(toasts) do
+TweenService:Create(t, Theme.Tweens.Window, { Position = UDim2.new(0.5, 0, 0, y) }):Play()
+y = y + t.AbsoluteSize.Y + GAP
+end
+end
+
+task.spawn(function()
+task.wait()
+relayout()
+end)
+
+openSnap:FadeOut()
+toast.BackgroundTransparency = 1
+toast.ImageTransparency = 1
+TweenService:Create(toast, Theme.Tweens.Window, { BackgroundTransparency = 0.1, ImageTransparency = 0.8 }):Play()
+openFade:FadeIn()
+
 TweenService:Create(timelineBar, TweenInfo.new(duration, Enum.EasingStyle.Linear), { Size = UDim2.fromScale(1, 1) }):Play()
 
 local dismissed = false
@@ -1940,8 +1972,15 @@ if dismissed then
 return
 end
 dismissed = true
-TweenService:Create(toast, Theme.Tweens.Window, { Position = UDim2.new(0.5, 0, 0, -80) }):Play()
-task.wait(0.4)
+local index = table.find(toasts, toast)
+if index then
+table.remove(toasts, index)
+end
+closeFade:FadeOut()
+TweenService:Create(toast, Theme.Tweens.Window, { BackgroundTransparency = 1, ImageTransparency = 1 }):Play()
+TweenService:Create(toast, Theme.Tweens.Window, { Position = UDim2.new(0.5, 0, 0, START_OFFSET) }):Play()
+relayout()
+task.wait(Theme.Tweens.Window.Time)
 toast:Destroy()
 end
 
