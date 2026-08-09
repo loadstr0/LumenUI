@@ -1291,6 +1291,312 @@ end
 return api
 end
 
+function Elements:ColorPicker(options)
+options = options or {}
+local color = options.Value or Color3.fromRGB(255, 255, 255)
+local hue, sat, val = color:ToHSV()
+local hasIcon = options.Icon ~= nil and options.Icon ~= ""
+local textOffset = hasIcon and 32 or 0
+local swatchWidth = 60
+local open = false
+
+local icon = new("ImageLabel", Helpers.withIcon({
+Name = "icon",
+BackgroundTransparency = 1,
+Visible = hasIcon,
+ImageColor3 = Theme.Text,
+ImageTransparency = 0.2,
+ScaleType = Enum.ScaleType.Fit,
+Size = UDim2.fromOffset(20, 20),
+Position = UDim2.fromOffset(0, 0),
+}, options.Icon, 48))
+
+local titleLabel = new("TextLabel", {
+Name = "title",
+BackgroundTransparency = 1,
+Text = options.Title or "",
+FontFace = Theme.CustomFontMedium,
+TextSize = 14,
+TextColor3 = Theme.Text,
+TextXAlignment = Enum.TextXAlignment.Left,
+Position = UDim2.fromOffset(textOffset, 0),
+Size = UDim2.new(1, -textOffset - swatchWidth - 12, 0, 18),
+})
+
+local descLabel = new("TextLabel", {
+Name = "desc",
+BackgroundTransparency = 1,
+Text = options.Desc or "",
+Visible = options.Desc ~= nil and options.Desc ~= "",
+FontFace = Theme.CustomFont,
+TextSize = 13,
+TextColor3 = Theme.TextMuted,
+TextXAlignment = Enum.TextXAlignment.Left,
+TextWrapped = true,
+Position = UDim2.fromOffset(textOffset, 20),
+Size = UDim2.new(1, -textOffset - swatchWidth - 12, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+})
+
+local swatchGlow = Helpers.glowStroke(1)
+local swatch = new("TextButton", {
+Name = "swatch",
+Text = "",
+BackgroundColor3 = color,
+AnchorPoint = Vector2.new(1, 0.5),
+Position = UDim2.new(1, 0, 0.5, 0),
+Size = UDim2.fromOffset(swatchWidth, 30),
+}, { corner(Theme.CornerRadius), swatchGlow[1], swatchGlow[2] })
+
+local row = new("Frame", {
+Name = "row",
+BackgroundTransparency = 1,
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = 1,
+}, { icon, titleLabel, descLabel, swatch })
+
+local svHandle = new("Frame", {
+Name = "handle",
+BackgroundColor3 = Color3.new(1, 1, 1),
+AnchorPoint = Vector2.new(0.5, 0.5),
+Size = UDim2.fromOffset(12, 12),
+ZIndex = 3,
+}, { corner(Theme.CornerRadiusPill), Helpers.stroke(Color3.new(0, 0, 0), 1.5) })
+
+local svSquare = new("Frame", {
+Name = "sv_square",
+BackgroundColor3 = Color3.fromHSV(hue, 1, 1),
+ClipsDescendants = true,
+Size = UDim2.new(1, 0, 0, 120),
+LayoutOrder = 1,
+}, {
+corner(Theme.CornerRadius),
+new("Frame", {
+Name = "white",
+BackgroundColor3 = Color3.new(1, 1, 1),
+Size = UDim2.fromScale(1, 1),
+}, {
+new("UIGradient", {
+Transparency = NumberSequence.new({
+NumberSequenceKeypoint.new(0, 0),
+NumberSequenceKeypoint.new(1, 1),
+}),
+}),
+}),
+new("Frame", {
+Name = "black",
+BackgroundColor3 = Color3.new(0, 0, 0),
+Size = UDim2.fromScale(1, 1),
+}, {
+new("UIGradient", {
+Rotation = 90,
+Transparency = NumberSequence.new({
+NumberSequenceKeypoint.new(0, 1),
+NumberSequenceKeypoint.new(1, 0),
+}),
+}),
+}),
+svHandle,
+new("TextButton", {
+Name = "input",
+Text = "",
+BackgroundTransparency = 1,
+Size = UDim2.fromScale(1, 1),
+ZIndex = 4,
+}),
+})
+local svButton = svSquare.input
+
+local hueHandle = new("Frame", {
+Name = "handle",
+BackgroundColor3 = Color3.new(1, 1, 1),
+AnchorPoint = Vector2.new(0.5, 0.5),
+Position = UDim2.new(0, 0, 0.5, 0),
+Size = UDim2.fromOffset(6, 20),
+ZIndex = 3,
+}, { corner(Theme.CornerRadius), Helpers.stroke(Color3.new(0, 0, 0), 1.5) })
+
+local hueBar = new("Frame", {
+Name = "hue_bar",
+BackgroundColor3 = Color3.new(1, 1, 1),
+ClipsDescendants = true,
+Size = UDim2.new(1, 0, 0, 16),
+LayoutOrder = 2,
+}, {
+corner(Theme.CornerRadiusPill),
+new("UIGradient", {
+Color = ColorSequence.new({
+ColorSequenceKeypoint.new(0, Color3.fromHSV(0, 1, 1)),
+ColorSequenceKeypoint.new(1 / 6, Color3.fromHSV(1 / 6, 1, 1)),
+ColorSequenceKeypoint.new(2 / 6, Color3.fromHSV(2 / 6, 1, 1)),
+ColorSequenceKeypoint.new(3 / 6, Color3.fromHSV(3 / 6, 1, 1)),
+ColorSequenceKeypoint.new(4 / 6, Color3.fromHSV(4 / 6, 1, 1)),
+ColorSequenceKeypoint.new(5 / 6, Color3.fromHSV(5 / 6, 1, 1)),
+ColorSequenceKeypoint.new(1, Color3.fromHSV(1, 1, 1)),
+}),
+}),
+hueHandle,
+new("TextButton", {
+Name = "input",
+Text = "",
+BackgroundTransparency = 1,
+Size = UDim2.fromScale(1, 1),
+ZIndex = 4,
+}),
+})
+local hueButton = hueBar.input
+
+local hexLabel = new("TextLabel", {
+Name = "hex",
+BackgroundTransparency = 1,
+Text = "#" .. color:ToHex(),
+FontFace = Theme.CustomFont,
+TextSize = 12,
+TextColor3 = Theme.TextMuted,
+TextXAlignment = Enum.TextXAlignment.Left,
+Size = UDim2.new(1, 0, 0, 16),
+LayoutOrder = 3,
+})
+
+local panelScale = new("UIScale", { Scale = 0.9 })
+local panel = new("CanvasGroup", {
+Name = "panel",
+Visible = false,
+GroupTransparency = 1,
+BackgroundTransparency = 1,
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = 2,
+}, {
+panelScale,
+new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) }),
+new("UIPadding", { PaddingTop = UDim.new(0, 8) }),
+svSquare,
+hueBar,
+hexLabel,
+})
+
+local container = surface("Frame", {
+Name = "colorpicker",
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = self:_nextOrder(),
+}, {
+new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
+new("UIPadding", {
+PaddingTop = UDim.new(0, 10),
+PaddingBottom = UDim.new(0, 10),
+PaddingLeft = UDim.new(0, 12),
+PaddingRight = UDim.new(0, 12),
+}),
+row,
+panel,
+})
+container.Parent = self.Page
+
+local function currentColor()
+return Color3.fromHSV(hue, sat, val)
+end
+
+local function render()
+local c = currentColor()
+swatch.BackgroundColor3 = c
+svSquare.BackgroundColor3 = Color3.fromHSV(hue, 1, 1)
+svHandle.Position = UDim2.new(sat, 0, 1 - val, 0)
+hueHandle.Position = UDim2.new(hue, 0, 0.5, 0)
+hexLabel.Text = "#" .. c:ToHex()
+end
+render()
+
+local function setOpen(newOpen)
+open = newOpen
+if open then
+panel.Visible = true
+TweenService:Create(panel, Theme.Tweens.PanelOpen, { GroupTransparency = 0 }):Play()
+TweenService:Create(panelScale, Theme.Tweens.PanelOpen, { Scale = 1 }):Play()
+else
+TweenService:Create(panel, Theme.Tweens.PanelClose, { GroupTransparency = 1 }):Play()
+TweenService:Create(panelScale, Theme.Tweens.PanelClose, { Scale = 0.9 }):Play()
+task.delay(Theme.Tweens.PanelClose.Time, function()
+if not open then
+panel.Visible = false
+end
+end)
+end
+end
+
+local function fireCallback()
+if type(options.Callback) == "function" then
+options.Callback(currentColor())
+end
+end
+
+local svDragging, hueDragging = false, false
+
+local function setFromSVInput(x, y)
+sat = math.clamp((x - svSquare.AbsolutePosition.X) / svSquare.AbsoluteSize.X, 0, 1)
+val = 1 - math.clamp((y - svSquare.AbsolutePosition.Y) / svSquare.AbsoluteSize.Y, 0, 1)
+render()
+fireCallback()
+end
+
+local function setFromHueInput(x)
+hue = math.clamp((x - hueBar.AbsolutePosition.X) / hueBar.AbsoluteSize.X, 0, 1)
+render()
+fireCallback()
+end
+
+svButton.InputBegan:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+svDragging = true
+setFromSVInput(input.Position.X, input.Position.Y)
+end
+end)
+
+hueButton.InputBegan:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+hueDragging = true
+setFromHueInput(input.Position.X)
+end
+end)
+
+self.Window:_track(UserInputService.InputChanged:Connect(function(input)
+if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
+return
+end
+if svDragging then
+setFromSVInput(input.Position.X, input.Position.Y)
+elseif hueDragging then
+setFromHueInput(input.Position.X)
+end
+end))
+
+self.Window:_track(UserInputService.InputEnded:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+svDragging = false
+hueDragging = false
+end
+end))
+
+swatch.MouseButton1Click:Connect(function()
+setOpen(not open)
+end)
+
+local api = {}
+
+function api:Set(newColor)
+hue, sat, val = newColor:ToHSV()
+render()
+end
+
+function api:Get()
+return currentColor()
+end
+
+return api
+end
+
 function Elements:Slider(options)
 options = options or {}
 local min = options.Min or 0
@@ -1488,17 +1794,17 @@ setFromScreenX(input.Position.X)
 end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
+self.Window:_track(UserInputService.InputChanged:Connect(function(input)
 if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 setFromScreenX(input.Position.X)
 end
-end)
+end))
 
-UserInputService.InputEnded:Connect(function(input)
+self.Window:_track(UserInputService.InputEnded:Connect(function(input)
 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 dragging = false
 end
-end)
+end))
 
 render()
 
@@ -2290,7 +2596,7 @@ layer.Visible = true
 end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
+self:_track(UserInputService.InputChanged:Connect(function(input)
 if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 local delta = input.Position - dragStartInput
 mainFrame.Position = UDim2.new(
@@ -2298,9 +2604,9 @@ dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X,
 dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y
 )
 end
-end)
+end))
 
-UserInputService.InputEnded:Connect(function(input)
+self:_track(UserInputService.InputEnded:Connect(function(input)
 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 if dragging then
 dragging = false
@@ -2308,7 +2614,7 @@ self.LastPosition = mainFrame.Position
 layer.Visible = false
 end
 end
-end)
+end))
 
 local resizing = false
 local resizeStartInput, resizeStartSize
@@ -2322,16 +2628,16 @@ layer.Visible = true
 end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
+self:_track(UserInputService.InputChanged:Connect(function(input)
 if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 local delta = input.Position - resizeStartInput
 local newX = math.clamp(resizeStartSize.X.Offset + delta.X, MIN_SIZE.X, maxSize.X)
 local newY = math.clamp(resizeStartSize.Y.Offset + delta.Y, MIN_SIZE.Y, maxSize.Y)
 mainFrame.Size = UDim2.fromOffset(newX, newY)
 end
-end)
+end))
 
-UserInputService.InputEnded:Connect(function(input)
+self:_track(UserInputService.InputEnded:Connect(function(input)
 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 if resizing then
 resizing = false
@@ -2339,7 +2645,7 @@ self.LastSize = mainFrame.Size
 layer.Visible = false
 end
 end
-end)
+end))
 
 handle.MouseButton1Click:Connect(function()
 controls.Visible = not controls.Visible
