@@ -1,3 +1,5 @@
-# Internal test tooling and third-party reference material - not part of the published library
+# Internal test tooling, third-party reference material, and library source - none of this is
+# needed to consume LumenUI (Loader.lua is fully self-contained), only to build/edit it.
 DevBridge/
 Reference/
+src/
