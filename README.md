@@ -22,19 +22,7 @@ local LumenUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/loads
 local Window = LumenUI:Require("Window")
 ```
 
-`Loader.lua` is a generated, self-contained bundle of every file in [`src/`](src/) (each module embedded as its own Luau chunk, wired together behind a small `ctx:Require` resolver) — nothing else to download, no Rojo project required.
-
-If you're syncing `src/` into your own project instead (Rojo, a ModuleScript tree, etc.), each file follows the same factory convention `Loader.lua` uses internally:
-
-```lua
--- every module: Window.lua, Elements.lua, Theme.lua, ...
-return function(ctx)
-    -- ctx:Require("Theme"), ctx:Require("Helpers"), etc.
-    return Window -- (or Elements, Theme, ...)
-end
-```
-
-so you can provide your own `ctx:Require(name)` (resolving `require(folder[name])(ctx)`, cached per name) instead of using `Loader.lua`. `DevBridge/build-loader.ps1` shows exactly how `Loader.lua` itself is assembled, and regenerates it after any `src/` change.
+`Loader.lua` is a generated, self-contained bundle of the library's modules — nothing else to download, no Rojo project, no sync step. It's the only supported way to consume LumenUI.
 
 ## Quickstart
 
@@ -132,22 +120,6 @@ Every tab returned by `window:Tab(...)` exposes:
 
 `Theme.lua` is a plain table — colors (`Background`, `Surface`, `SurfaceRaised`, `Text`, `TextMuted`, `Glow`), fonts, `CornerRadius`/`CornerRadiusPill`, `Icons` (asset ids for chrome icons), and `Tweens` (named `TweenInfo` presets used throughout the library). Fork or edit this file to reskin LumenUI without touching any other module.
 
-## Project layout
-
-```
-Loader.lua       -- generated, self-contained bundle - what you actually loadstring
-src/
-  Window.lua      -- window chrome, tabs, navigation, open/close animation
-  Elements.lua     -- Paragraph, Button, Toggle, Section/Card, Slider
-  Confirm.lua      -- confirmation dialog
-  Notify.lua       -- toast notifications
-  Theme.lua        -- colors, fonts, tween presets
-  Helpers.lua      -- shared instance/hover/icon utilities
-  Icons.lua        -- Lucide icon sprite-sheet data
-  Lucide.lua        -- Lucide icon name resolver
-  BulkFade.lua     -- batched transparency fade helper used by Window/Confirm
-```
-
 ## License
 
-MIT
+All rights reserved. This library is distributed as a compiled/obfuscated build (`Loader.lua`) for use via the loadstring URL above — it is not licensed for redistribution, resale, or reuse of its source.
