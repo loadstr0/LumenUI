@@ -15,7 +15,16 @@ Every animation (shimmer hover, halo hover, panel open/close, page-switch slide,
 
 ## Installation
 
-LumenUI ships as plain Lua/Luau modules under [`src/`](src/) — no build step, no Rojo project required. Each file follows a small factory convention:
+LumenUI ships as a single `Loader.lua` — load it once with `loadstring`, then pull out whichever modules you need with `:Require(name)`:
+
+```lua
+local LumenUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/loadstr0/LumenUI/main/Loader.lua"))()
+local Window = LumenUI:Require("Window")
+```
+
+`Loader.lua` is a generated, self-contained bundle of every file in [`src/`](src/) (each module embedded as its own Luau chunk, wired together behind a small `ctx:Require` resolver) — nothing else to download, no Rojo project required.
+
+If you're syncing `src/` into your own project instead (Rojo, a ModuleScript tree, etc.), each file follows the same factory convention `Loader.lua` uses internally:
 
 ```lua
 -- every module: Window.lua, Elements.lua, Theme.lua, ...
@@ -25,27 +34,13 @@ return function(ctx)
 end
 ```
 
-Drop the `src/` files into a `ModuleScript` folder in your project (e.g. `ReplicatedStorage/LumenUI`), then provide a small `ctx` object with a `Require(name)` method that resolves and caches each module by name:
-
-```lua
-local folder = script.LumenUI -- wherever you parented src/'s files
-
-local ctx = {}
-local cache = {}
-function ctx:Require(name)
-    if not cache[name] then
-        cache[name] = require(folder[name])(ctx)
-    end
-    return cache[name]
-end
-
-local Window = ctx:Require("Window")
-```
+so you can provide your own `ctx:Require(name)` (resolving `require(folder[name])(ctx)`, cached per name) instead of using `Loader.lua`. `DevBridge/build-loader.ps1` shows exactly how `Loader.lua` itself is assembled, and regenerates it after any `src/` change.
 
 ## Quickstart
 
 ```lua
-local Window = ctx:Require("Window")
+local LumenUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/loadstr0/LumenUI/main/Loader.lua"))()
+local Window = LumenUI:Require("Window")
 
 local window = Window.new({
     Title = "My Hub",
@@ -140,6 +135,7 @@ Every tab returned by `window:Tab(...)` exposes:
 ## Project layout
 
 ```
+Loader.lua       -- generated, self-contained bundle - what you actually loadstring
 src/
   Window.lua      -- window chrome, tabs, navigation, open/close animation
   Elements.lua     -- Paragraph, Button, Toggle, Section/Card, Slider
