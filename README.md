@@ -5,9 +5,10 @@ A dark, monochrome Roblox UI library — window chrome, tabs, form elements, dia
 ## Features
 
 - **Window** — draggable/resizable chrome, fullscreen toggle, a popup nav menu (not a sidebar) with a search box to filter tabs by title, a "welcome back" splash intro on open, and automatic cleanup of any previous LumenUI window (and its keybinds) if the loadstring is re-run in the same session.
-- **Elements** — `Paragraph`, `Button`, `Toggle`, `Section` + `Card` (icon grid), `Slider`, `Keybind`, `Dropdown`, `Input`, `Divider`, `ColorPicker`.
+- **Elements** — `Paragraph`, `Button`, `Toggle`, `Section` + `Card` (icon grid), `Slider`, `Keybind`, `Dropdown` (with optional multi-select), `Input`, `Divider`, `ColorPicker`, `ProgressBar`.
 - **Confirm** — a blocking confirmation dialog (`title`, `content`, `callback`).
 - **Notify** — dismissible toast notifications with icon + auto-dismiss duration, same background as the main window (not a flat color fill), fading and sliding in/out. Multiple toasts stack newest-on-top and animate to a new slot whenever one is added or dismissed, instead of snapping.
+- **Config** — tag any stateful element with a `Flag` and save/load its value to disk with `window:SaveConfig`/`window:LoadConfig`, so a hub's settings survive a script restart.
 - **Icons** — built-in [Lucide](https://lucide.dev) icon resolver (`Helpers.icon` / `Helpers.withIcon`), used by name (`"home"`, `"settings"`, …) with automatic fallback for unknown names.
 - **Theme** — a single module of colors, fonts, corner radii, and `TweenInfo` presets; override any field to reskin the whole library.
 
@@ -56,11 +57,13 @@ local toggle = home:Toggle({
     Title = "Enable feature",
     Icon = "toggle-left",
     Value = false,
+    Flag = "enableFeature", -- optional: makes this value save/load with window:SaveConfig/LoadConfig
     Callback = function(value)
         print("Toggled:", value)
     end,
 })
 -- toggle:Set(true) -- set programmatically without firing Callback
+-- toggle:Get() -- current value
 
 home:Slider({
     Title = "Volume",
@@ -68,6 +71,7 @@ home:Slider({
     Max = 100,
     Increment = 5,
     Value = 50,
+    Flag = "volume", -- optional, same Config-persistence hook as Toggle above
     Callback = function(value)
         print("Slider:", value)
     end,
@@ -108,6 +112,27 @@ local dropdown = home:Dropdown({
 })
 -- dropdown:SetOptions({ "New", "List" }) -- replaces the choices, clearing selection if stale
 
+local multiDropdown = home:Dropdown({
+    Title = "Modules",
+    Desc = "Multi = true lets you pick several without closing the list.",
+    Icon = "layers",
+    Multi = true,
+    Options = { "Combat", "Movement", "ESP" },
+    Value = { "Combat" }, -- initial selection, array of strings
+    Callback = function(values)
+        print("Selected:", table.concat(values, ", "))
+    end,
+})
+-- multiDropdown:Get() -- array of currently-selected strings
+
+local progressBar = home:ProgressBar({
+    Title = "Loading progress",
+    Min = 0,
+    Max = 100,
+    Value = 25,
+})
+-- progressBar:Set(80) -- read-only display, no Callback; update it as your own state changes
+
 local colorpicker = home:ColorPicker({
     Title = "Accent Color",
     Desc = "Click the swatch to expand a saturation/value square + hue bar.",
@@ -135,6 +160,14 @@ section:Card({
         end)
     end,
 })
+
+-- Config persistence: any element created with a Flag (toggle/slider/dropdown above) gets
+-- saved and restored together. Load fires each element's real Callback, so restoring a config
+-- actually re-applies its effects, not just the widget's displayed value.
+window:SaveConfig("default")
+-- window:LoadConfig("default")
+-- window:ListConfigs() -- { "default" }
+-- window:DeleteConfig("default")
 ```
 
 ## API reference
@@ -151,6 +184,10 @@ section:Card({
 | `window:Notify(title, content, icon?, duration?)` | Shows a toast. |
 | `window:Confirm(title, content, callback)` | Shows a confirmation dialog; `callback` runs on confirm. |
 | `window:Destroy()` | Tears down the window and disconnects every service-level connection it owns (drag/resize, every `tab:Keybind`, `tab:Slider`/`tab:ColorPicker` dragging). Called automatically on the previous window if you re-run the loadstring in the same session - no stacked windows or leaked input listeners across reloads. |
+| `window:SaveConfig(name)` | Writes the current value of every `Flag`-tagged element to `"<window Name>/Configs/<name>.json"` on disk. Returns `true`, or `false, errorString`. |
+| `window:LoadConfig(name)` | Applies a saved config's values to every `Flag`-tagged element that still exists, firing each element's real `Callback` (not just updating the widget). Returns `true`, or `false, errorString`. |
+| `window:ListConfigs()` | Returns an array of saved config names (no `.json`) for this window. |
+| `window:DeleteConfig(name)` | Deletes a saved config. Returns `true`, or `false, errorString`. |
 
 ### Tab elements
 
@@ -160,15 +197,18 @@ Every tab returned by `window:Tab(...)` exposes:
 |---|---|
 | `tab:Paragraph(options)` | `Title`, `Desc` |
 | `tab:Button(options)` | `Title`, `Desc`, `Icon`, `Callback()` |
-| `tab:Toggle(options)` | `Title`, `Desc`, `Icon`, `Value`, `Callback(value)` — returns `{ Set(self, value) }` |
-| `tab:Slider(options)` | `Title`, `Desc`, `Min`, `Max`, `Increment`, `Value`, `Callback(value)` — returns `{ Set(self, value), Get(self) }` |
-| `tab:Keybind(options)` | `Title`, `Desc`, `Icon`, `Value` (`Enum.KeyCode`), `Callback(key)` — `Callback` fires when the *bound* key is pressed, not on rebind; click the badge to rebind, Escape cancels. Returns `{ Set(self, key), Get(self) }` |
-| `tab:Dropdown(options)` | `Title`, `Desc`, `Icon`, `Options` (array of strings), `Value` (initial selection), `Callback(value)` — returns `{ Set(self, value), Get(self), SetOptions(self, newOptions) }` |
-| `tab:Input(options)` | `Title`, `Desc`, `Icon`, `Placeholder`, `Value` (initial text), `Callback(text, enterPressed)` — fires on `FocusLost` (Enter or clicking away), not every keystroke. Returns `{ Set(self, text), Get(self) }` |
+| `tab:Toggle(options)` | `Title`, `Desc`, `Icon`, `Value`, `Flag`, `Callback(value)` — returns `{ Set(self, value), Get(self) }` |
+| `tab:Slider(options)` | `Title`, `Desc`, `Min`, `Max`, `Increment`, `Value`, `Flag`, `Callback(value)` — returns `{ Set(self, value), Get(self) }` |
+| `tab:Keybind(options)` | `Title`, `Desc`, `Icon`, `Value` (`Enum.KeyCode`), `Flag`, `Callback(key)` — `Callback` fires when the *bound* key is pressed, not on rebind (and not on a `Flag`-driven config load either — a config load restores which key is bound, it doesn't simulate a keypress); click the badge to rebind, Escape cancels. Returns `{ Set(self, key), Get(self) }` |
+| `tab:Dropdown(options)` | `Title`, `Desc`, `Icon`, `Options` (array of strings), `Value` (initial selection — a string, or an array of strings when `Multi` is set), `Multi` (bool, optional — allow selecting several options without closing the list), `Flag`, `Callback(value)` — `value` is a string normally, or an array of strings when `Multi` is set. Returns `{ Set(self, value), Get(self), SetOptions(self, newOptions) }` |
+| `tab:Input(options)` | `Title`, `Desc`, `Icon`, `Placeholder`, `Value` (initial text), `Flag`, `Callback(text, enterPressed)` — fires on `FocusLost` (Enter or clicking away), not every keystroke. Returns `{ Set(self, text), Get(self) }` |
 | `tab:Divider(options?)` | `Title` (optional) — a thin rule for breaking a tab into visual groups |
-| `tab:ColorPicker(options)` | `Title`, `Desc`, `Icon`, `Value` (`Color3`), `Callback(color)` — click the swatch to expand a saturation/value square + hue bar. Returns `{ Set(self, color), Get(self) }` |
+| `tab:ColorPicker(options)` | `Title`, `Desc`, `Icon`, `Value` (`Color3`), `Flag`, `Callback(color)` — click the swatch to expand a saturation/value square + hue bar. Returns `{ Set(self, color), Get(self) }` |
+| `tab:ProgressBar(options)` | `Title`, `Desc`, `Icon`, `Min`, `Max`, `Value` — read-only display, no `Callback`; call `:Set(value)` to update it as your own state changes. Returns `{ Set(self, value), Get(self) }` |
 | `tab:Section(options)` | `Title`, `Desc` — returns a section with `:Card(cardOptions)` |
 | `section:Card(cardOptions)` | `Title`, `Icon`, `Callback()` |
+
+`Flag` (a unique string) is optional on every element above except `ProgressBar`. Set it to make that element's value participate in `window:SaveConfig`/`LoadConfig`/`ListConfigs`/`DeleteConfig` — see the Config example in Quickstart.
 
 ### Theme
 

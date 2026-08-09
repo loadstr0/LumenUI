@@ -621,18 +621,32 @@ BackgroundTransparency = value and 0.05 or 0.35,
 }):Play()
 end
 
-function api:Set(newValue)
+local function apply(newValue, fireCallback)
 value = newValue == true
 render()
+if fireCallback and type(options.Callback) == "function" then
+options.Callback(value)
+end
+end
+
+function api:Set(newValue)
+apply(newValue, false)
+end
+
+function api:Get()
+return value
 end
 
 hitbox.MouseButton1Click:Connect(function()
-value = not value
-render()
-if type(options.Callback) == "function" then
-options.Callback(value)
-end
+apply(not value, true)
 end)
+
+if options.Flag then
+self.Window:_registerFlag(options.Flag, {
+Get = function() return value end,
+Load = function(newValue) apply(newValue, true) end,
+})
+end
 
 return api
 end
@@ -905,15 +919,27 @@ end
 end
 end))
 
-local api = {}
-
-function api:Set(newValue)
+local function apply(newValue)
 value = newValue
 keyLabel.Text = value and value.Name or "None"
 end
 
+local api = {}
+
+function api:Set(newValue)
+apply(newValue)
+end
+
 function api:Get()
 return value
+end
+
+if options.Flag then
+self.Window:_registerFlag(options.Flag, {
+Get = function() return value end,
+
+Load = apply,
+})
 end
 
 return api
@@ -1049,10 +1075,14 @@ textBox,
 })
 container.Parent = self.Page
 
-textBox.FocusLost:Connect(function(enterPressed)
+local function fireCallback(enterPressed)
 if type(options.Callback) == "function" then
 options.Callback(textBox.Text, enterPressed)
 end
+end
+
+textBox.FocusLost:Connect(function(enterPressed)
+fireCallback(enterPressed)
 end)
 
 local api = {}
@@ -1065,13 +1095,34 @@ function api:Get()
 return textBox.Text
 end
 
+if options.Flag then
+self.Window:_registerFlag(options.Flag, {
+Get = function() return textBox.Text end,
+Load = function(newValue)
+textBox.Text = newValue or ""
+fireCallback(false)
+end,
+})
+end
+
 return api
 end
 
 function Elements:Dropdown(options)
 options = options or {}
 local choices = options.Options or {}
-local value = options.Value
+local multi = options.Multi == true
+local value
+if multi then
+value = {}
+if type(options.Value) == "table" then
+for _, v in ipairs(options.Value) do
+table.insert(value, v)
+end
+end
+else
+value = options.Value
+end
 local hasIcon = options.Icon ~= nil and options.Icon ~= ""
 local textOffset = hasIcon and 32 or 0
 local boxWidth = 140
@@ -1128,10 +1179,10 @@ Size = UDim2.fromOffset(14, 14),
 local selectedLabel = new("TextLabel", {
 Name = "selected",
 BackgroundTransparency = 1,
-Text = value or "Select...",
+Text = "",
 FontFace = Theme.CustomFont,
 TextSize = 13,
-TextColor3 = value and Theme.Text or Theme.TextMuted,
+TextColor3 = Theme.TextMuted,
 TextXAlignment = Enum.TextXAlignment.Left,
 TextTruncate = Enum.TextTruncate.AtEnd,
 Size = UDim2.new(1, -30, 1, 0),
@@ -1212,12 +1263,76 @@ end)
 end
 end
 
+local function isSelected(choice)
+if multi then
+return table.find(value, choice) ~= nil
+end
+return choice == value
+end
+
+local function summaryText()
+if multi then
+if #value == 0 then
+return "Select..."
+elseif #value == 1 then
+return value[1]
+end
+return #value .. " selected"
+end
+return value or "Select..."
+end
+
+local function hasSelection()
+if multi then
+return #value > 0
+end
+return value ~= nil
+end
+
+local function renderSelectedLabel()
+selectedLabel.Text = summaryText()
+selectedLabel.TextColor3 = hasSelection() and Theme.Text or Theme.TextMuted
+end
+
+local function refreshOptionHighlights()
+for _, optionButton in ipairs(optionButtons) do
+optionButton.label.TextColor3 = isSelected(optionButton:GetAttribute("Choice")) and Theme.Text or Theme.TextMuted
+end
+end
+
 local function select(choice, fromUser)
+if multi then
+local idx = table.find(value, choice)
+if idx then
+table.remove(value, idx)
+else
+table.insert(value, choice)
+end
+else
 value = choice
-selectedLabel.Text = value or "Select..."
-selectedLabel.TextColor3 = value and Theme.Text or Theme.TextMuted
 setOpen(false)
+end
+renderSelectedLabel()
+refreshOptionHighlights()
 if fromUser and type(options.Callback) == "function" then
+options.Callback(value)
+end
+end
+
+local function setValue(newValue, fireCallback)
+if multi then
+value = {}
+if type(newValue) == "table" then
+for _, v in ipairs(newValue) do
+table.insert(value, v)
+end
+end
+else
+value = newValue
+end
+renderSelectedLabel()
+refreshOptionHighlights()
+if fireCallback and type(options.Callback) == "function" then
 options.Callback(value)
 end
 end
@@ -1241,12 +1356,14 @@ BackgroundTransparency = 1,
 Text = choice,
 FontFace = Theme.CustomFont,
 TextSize = 13,
-TextColor3 = choice == value and Theme.Text or Theme.TextMuted,
+TextColor3 = isSelected(choice) and Theme.Text or Theme.TextMuted,
 TextXAlignment = Enum.TextXAlignment.Left,
 Size = UDim2.new(1, -16, 1, 0),
 Position = UDim2.fromOffset(8, 0),
 }),
 })
+
+optionButton:SetAttribute("Choice", choice)
 optionButton.Parent = optionsList
 optionButton.MouseEnter:Connect(function()
 TweenService:Create(optionButton, Theme.Tweens.Fast, { BackgroundTransparency = 0.7 }):Play()
@@ -1262,6 +1379,7 @@ end
 end
 
 buildOptions()
+renderSelectedLabel()
 
 selector.MouseButton1Click:Connect(function()
 setOpen(not open)
@@ -1270,7 +1388,7 @@ end)
 local api = {}
 
 function api:Set(newValue)
-select(newValue, false)
+setValue(newValue, false)
 end
 
 function api:Get()
@@ -1279,10 +1397,24 @@ end
 
 function api:SetOptions(newChoices)
 choices = newChoices or {}
-if value and not table.find(choices, value) then
-select(nil, false)
+if multi then
+for i = #value, 1, -1 do
+if not table.find(choices, value[i]) then
+table.remove(value, i)
 end
+end
+elseif value and not table.find(choices, value) then
+value = nil
+end
+renderSelectedLabel()
 buildOptions()
+end
+
+if options.Flag then
+self.Window:_registerFlag(options.Flag, {
+Get = function() return value end,
+Load = function(newValue) setValue(newValue, true) end,
+})
 end
 
 return api
@@ -1579,15 +1711,29 @@ swatch.MouseButton1Click:Connect(function()
 setOpen(not open)
 end)
 
+local function apply(newColor, fireCb)
+hue, sat, val = newColor:ToHSV()
+render()
+if fireCb then
+fireCallback()
+end
+end
+
 local api = {}
 
 function api:Set(newColor)
-hue, sat, val = newColor:ToHSV()
-render()
+apply(newColor, false)
 end
 
 function api:Get()
 return currentColor()
+end
+
+if options.Flag then
+self.Window:_registerFlag(options.Flag, {
+Get = function() return currentColor() end,
+Load = function(newColor) apply(newColor, true) end,
+})
 end
 
 return api
@@ -1803,6 +1949,168 @@ dragging = false
 end
 end))
 
+render()
+
+local function apply(newValue, fireCallback)
+value = math.clamp(newValue, min, max)
+render()
+if fireCallback and type(options.Callback) == "function" then
+options.Callback(value)
+end
+end
+
+local api = {}
+
+function api:Set(newValue)
+apply(newValue, false)
+end
+
+function api:Get()
+return value
+end
+
+if options.Flag then
+self.Window:_registerFlag(options.Flag, {
+Get = function() return value end,
+Load = function(newValue) apply(newValue, true) end,
+})
+end
+
+return api
+end
+
+function Elements:ProgressBar(options)
+options = options or {}
+local min = options.Min or 0
+local max = options.Max or 100
+local value = math.clamp(options.Value or min, min, max)
+local hasIcon = options.Icon ~= nil and options.Icon ~= ""
+local textOffset = hasIcon and 32 or 0
+
+local icon = new("ImageLabel", Helpers.withIcon({
+Name = "icon",
+BackgroundTransparency = 1,
+Visible = hasIcon,
+ImageColor3 = Theme.Text,
+ImageTransparency = 0.2,
+ScaleType = Enum.ScaleType.Fit,
+Size = UDim2.fromOffset(20, 20),
+Position = UDim2.fromOffset(0, 0),
+}, options.Icon, 48))
+
+local valueLabel = new("TextLabel", {
+Name = "text",
+BackgroundTransparency = 1,
+Text = tostring(value) .. "/" .. tostring(max),
+FontFace = Theme.CustomFontMedium,
+TextSize = 12,
+TextColor3 = Theme.Text,
+AutomaticSize = Enum.AutomaticSize.X,
+Size = UDim2.fromScale(0, 1),
+})
+
+local valueBadge = new("Frame", {
+Name = "value",
+BackgroundColor3 = Theme.Text,
+BackgroundTransparency = 0.8,
+AutomaticSize = Enum.AutomaticSize.X,
+Size = UDim2.fromOffset(0, 20),
+AnchorPoint = Vector2.new(1, 0.5),
+Position = UDim2.new(1, 0, 0.5, 0),
+}, {
+corner(Theme.CornerRadiusPill),
+new("UIPadding", { PaddingLeft = UDim.new(0, 9), PaddingRight = UDim.new(0, 9) }),
+valueLabel,
+})
+
+local titleLabel = new("TextLabel", {
+Name = "title",
+BackgroundTransparency = 1,
+Text = options.Title or "",
+FontFace = Theme.CustomFontMedium,
+TextSize = 14,
+TextColor3 = Theme.Text,
+TextXAlignment = Enum.TextXAlignment.Left,
+Position = UDim2.fromOffset(textOffset, 0),
+Size = UDim2.new(1, -textOffset - 50, 0, 20),
+}, { valueBadge })
+
+local descLabel = new("TextLabel", {
+Name = "desc",
+BackgroundTransparency = 1,
+Text = options.Desc or "",
+Visible = options.Desc ~= nil and options.Desc ~= "",
+FontFace = Theme.CustomFont,
+TextSize = 13,
+TextColor3 = Theme.TextMuted,
+TextXAlignment = Enum.TextXAlignment.Left,
+TextWrapped = true,
+Position = UDim2.fromOffset(textOffset, 20),
+Size = UDim2.new(1, -textOffset, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+})
+
+local header = new("Frame", {
+Name = "header",
+BackgroundTransparency = 1,
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = 1,
+}, { icon, titleLabel, descLabel })
+
+local depth = new("ImageLabel", {
+Name = "depth",
+BackgroundTransparency = 1,
+Image = Theme.Slider.DepthImage,
+ImageTransparency = 0.5,
+ScaleType = Enum.ScaleType.Slice,
+SliceCenter = Theme.Slider.DepthSliceCenter,
+Size = UDim2.new(1, 0, 1, 0),
+})
+
+local fill = new("Frame", {
+Name = "fill",
+BackgroundColor3 = Theme.SurfaceRaised,
+BorderSizePixel = 0,
+ClipsDescendants = true,
+Size = UDim2.fromScale(0, 1),
+ZIndex = 1,
+}, {
+corner(Theme.CornerRadiusPill),
+})
+
+local trackGlow = Helpers.glowStroke(1)
+local track = new("Frame", {
+Name = "track",
+BackgroundColor3 = Color3.new(0, 0, 0),
+BackgroundTransparency = 0.7,
+Size = UDim2.new(1, 0, 0, Theme.Slider.TrackHeight),
+LayoutOrder = 2,
+}, { corner(Theme.CornerRadiusPill), trackGlow[1], trackGlow[2], depth, fill })
+
+local container = surface("Frame", {
+Name = "progressbar",
+Size = UDim2.new(1, 0, 0, 0),
+AutomaticSize = Enum.AutomaticSize.Y,
+LayoutOrder = self:_nextOrder(),
+}, {
+new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10) }),
+new("UIPadding", {
+PaddingTop = UDim.new(0, 10),
+PaddingBottom = UDim.new(0, 10),
+PaddingLeft = UDim.new(0, 12),
+PaddingRight = UDim.new(0, 12),
+}),
+header,
+track,
+})
+container.Parent = self.Page
+
+local function render()
+local fraction = (max > min) and math.clamp((value - min) / (max - min), 0, 1) or 0
+TweenService:Create(fill, Theme.Tweens.Fast, { Size = UDim2.fromScale(fraction, 1) }):Play()
+valueLabel.Text = tostring(value) .. "/" .. tostring(max)
+end
 render()
 
 local api = {}
@@ -2154,6 +2462,134 @@ end)
 end
 
 return Confirm
+end
+]=],
+["Config"]=[=[
+return function(ctx)
+local HttpService = game:GetService("HttpService")
+
+local Config = {}
+
+local function configFolder(window)
+return (window.ScreenGui.Name or "LumenUI") .. "/Configs"
+end
+
+local function configPath(window, name)
+return configFolder(window) .. "/" .. name .. ".json"
+end
+
+local Serializers = {
+Color3 = function(value)
+return { __type = "Color3", Hex = value:ToHex() }
+end,
+EnumItem = function(value)
+
+return { __type = "EnumItem", EnumType = tostring(value.EnumType), Name = value.Name }
+end,
+}
+
+local function serialize(value)
+local t = typeof(value)
+if Serializers[t] then
+return Serializers[t](value)
+end
+return value
+end
+
+local function deserialize(value)
+if type(value) == "table" and value.__type then
+if value.__type == "Color3" then
+return Color3.fromHex(value.Hex)
+elseif value.__type == "EnumItem" then
+local enumType = Enum[value.EnumType]
+return enumType and enumType[value.Name]
+end
+end
+return value
+end
+
+function Config.Save(window, name)
+if type(name) ~= "string" or name == "" then
+return false, "config name must be a non-empty string"
+end
+local ok, err = pcall(function()
+if not isfolder(configFolder(window)) then
+makefolder(configFolder(window))
+end
+local data = {}
+for flag, entry in pairs(window.Flags) do
+data[flag] = serialize(entry.Get())
+end
+writefile(configPath(window, name), HttpService:JSONEncode(data))
+end)
+if not ok then
+return false, tostring(err)
+end
+return true
+end
+
+function Config.Load(window, name)
+if type(name) ~= "string" or name == "" then
+return false, "config name must be a non-empty string"
+end
+local path = configPath(window, name)
+local ok, result = pcall(function()
+if not isfile(path) then
+error("no saved config named \"" .. name .. "\"", 0)
+end
+local data = HttpService:JSONDecode(readfile(path))
+for flag, rawValue in pairs(data) do
+local entry = window.Flags[flag]
+if entry then
+entry.Load(deserialize(rawValue))
+end
+end
+end)
+if not ok then
+return false, tostring(result)
+end
+return true
+end
+
+function Config.List(window)
+local folder = configFolder(window)
+local ok, files = pcall(function()
+if not isfolder(folder) then
+return {}
+end
+return listfiles(folder)
+end)
+if not ok then
+return {}
+end
+local names = {}
+for _, path in ipairs(files) do
+local name = path:match("([^\\/]+)%.json$")
+if name then
+table.insert(names, name)
+end
+end
+return names
+end
+
+function Config.Delete(window, name)
+if type(name) ~= "string" or name == "" then
+return false, "config name must be a non-empty string"
+end
+local path = configPath(window, name)
+local ok, err = pcall(function()
+if not isfile(path) then
+error("no saved config named \"" .. name .. "\"", 0)
+end
+delfile(path)
+end)
+if not ok then
+return false, tostring(err)
+end
+return true
+end
+
+return Config
 end
 ]=],
 ["Window"]=[=[
@@ -2615,6 +3051,8 @@ LastPosition = mainFrame.Position,
 LastSize = mainFrame.Size,
 
 Connections = {},
+
+Flags = {},
 }, Window)
 
 self:_wireChrome(handle, controls, resizeButton, resizeDisabled, fullscreenButton, fullscreenIcon, resizeHandle, menuButton, menuBackdrop, layer, maxSize)
@@ -2649,6 +3087,13 @@ end
 function Window:_track(connection)
 table.insert(self.Connections, connection)
 return connection
+end
+
+function Window:_registerFlag(flag, entry)
+if self.Flags[flag] then
+warn("[LumenUI] Duplicate Flag \"" .. tostring(flag) .. "\" - the earlier element with this flag will be shadowed by config save/load.")
+end
+self.Flags[flag] = entry
 end
 
 function Window:_wireChrome(handle, controls, resizeButton, resizeDisabled, fullscreenButton, fullscreenIcon, resizeHandle, menuButton, menuBackdrop, layer, maxSize)
@@ -2973,6 +3418,22 @@ function Window:Confirm(...)
 return ctx:Require("Confirm").Show(self, ...)
 end
 
+function Window:SaveConfig(name)
+return ctx:Require("Config").Save(self, name)
+end
+
+function Window:LoadConfig(name)
+return ctx:Require("Config").Load(self, name)
+end
+
+function Window:ListConfigs()
+return ctx:Require("Config").List(self)
+end
+
+function Window:DeleteConfig(name)
+return ctx:Require("Config").Delete(self, name)
+end
+
 function Window:Destroy()
 if self.Destroyed then
 return
@@ -3003,7 +3464,7 @@ function ctx:Require(name)
 	if value==nil then error("[LumenUI] Unknown or not-yet-initialized module "..tostring(name),2) end
 	return value
 end
-local order={"Theme","Icons","Lucide","Helpers","BulkFade","Elements","Notify","Confirm","Window"}
+local order={"Theme","Icons","Lucide","Helpers","BulkFade","Elements","Notify","Confirm","Config","Window"}
 for _,name in ipairs(order) do
 	local chunk,compileError=loadstring(sources[name],"=LumenUI/"..name..".lua")
 	if not chunk then error("[LumenUI] "..name.." compile failed: "..tostring(compileError),0) end
