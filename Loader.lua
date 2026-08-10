@@ -2108,14 +2108,13 @@ ZIndex = 1,
 corner(Theme.CornerRadiusPill),
 })
 
-local trackGlow = Helpers.glowStroke(1)
 local track = new("Frame", {
 Name = "track",
 BackgroundColor3 = Color3.new(0, 0, 0),
 BackgroundTransparency = 0.7,
 Size = UDim2.new(1, 0, 0, Theme.Slider.TrackHeight),
 LayoutOrder = 2,
-}, { corner(Theme.CornerRadiusPill), trackGlow[1], trackGlow[2], depth, fill, minLabel, maxLabel })
+}, { corner(Theme.CornerRadiusPill), depth, fill, minLabel, maxLabel })
 
 local container = surface("Frame", {
 Name = "progressbar",
