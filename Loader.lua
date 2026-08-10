@@ -1200,7 +1200,7 @@ Position = UDim2.new(1, 0, 0.5, 0),
 Size = UDim2.fromOffset(boxWidth, 30),
 }, { corner(Theme.CornerRadius), selectorGlow[1], selectorGlow[2], selectedLabel, chevron })
 
-local optionsListScale = new("UIScale", { Scale = 0.9 })
+local optionsLayout = new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder })
 local optionsList = new("CanvasGroup", {
 Name = "options",
 Visible = false,
@@ -1208,12 +1208,10 @@ GroupTransparency = 1,
 BackgroundColor3 = Theme.Surface,
 BackgroundTransparency = 0.3,
 Size = UDim2.new(1, 0, 0, 0),
-AutomaticSize = Enum.AutomaticSize.Y,
 LayoutOrder = 2,
 }, {
-optionsListScale,
 corner(Theme.CornerRadius),
-new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
+optionsLayout,
 new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }),
 })
 
@@ -1250,11 +1248,16 @@ open = newOpen
 TweenService:Create(chevron, Theme.Tweens.Fast, { Rotation = open and 180 or 0 }):Play()
 if open then
 optionsList.Visible = true
-TweenService:Create(optionsList, Theme.Tweens.PanelOpen, { GroupTransparency = 0 }):Play()
-TweenService:Create(optionsListScale, Theme.Tweens.PanelOpen, { Scale = 1 }):Play()
+local targetHeight = optionsLayout.AbsoluteContentSize.Y + 8
+TweenService:Create(optionsList, Theme.Tweens.PanelOpen, {
+Size = UDim2.new(1, 0, 0, targetHeight),
+GroupTransparency = 0,
+}):Play()
 else
-TweenService:Create(optionsList, Theme.Tweens.PanelClose, { GroupTransparency = 1 }):Play()
-TweenService:Create(optionsListScale, Theme.Tweens.PanelClose, { Scale = 0.9 }):Play()
+TweenService:Create(optionsList, Theme.Tweens.PanelClose, {
+Size = UDim2.new(1, 0, 0, 0),
+GroupTransparency = 1,
+}):Play()
 task.delay(Theme.Tweens.PanelClose.Time, function()
 if not open then
 optionsList.Visible = false
@@ -1587,18 +1590,16 @@ Size = UDim2.new(1, 0, 0, 16),
 LayoutOrder = 3,
 })
 
-local panelScale = new("UIScale", { Scale = 0.9 })
+local panelLayout = new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) })
 local panel = new("CanvasGroup", {
 Name = "panel",
 Visible = false,
 GroupTransparency = 1,
 BackgroundTransparency = 1,
 Size = UDim2.new(1, 0, 0, 0),
-AutomaticSize = Enum.AutomaticSize.Y,
 LayoutOrder = 2,
 }, {
-panelScale,
-new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) }),
+panelLayout,
 new("UIPadding", { PaddingTop = UDim.new(0, 8) }),
 svSquare,
 hueBar,
@@ -1641,11 +1642,16 @@ local function setOpen(newOpen)
 open = newOpen
 if open then
 panel.Visible = true
-TweenService:Create(panel, Theme.Tweens.PanelOpen, { GroupTransparency = 0 }):Play()
-TweenService:Create(panelScale, Theme.Tweens.PanelOpen, { Scale = 1 }):Play()
+local targetHeight = panelLayout.AbsoluteContentSize.Y + 8
+TweenService:Create(panel, Theme.Tweens.PanelOpen, {
+Size = UDim2.new(1, 0, 0, targetHeight),
+GroupTransparency = 0,
+}):Play()
 else
-TweenService:Create(panel, Theme.Tweens.PanelClose, { GroupTransparency = 1 }):Play()
-TweenService:Create(panelScale, Theme.Tweens.PanelClose, { Scale = 0.9 }):Play()
+TweenService:Create(panel, Theme.Tweens.PanelClose, {
+Size = UDim2.new(1, 0, 0, 0),
+GroupTransparency = 1,
+}):Play()
 task.delay(Theme.Tweens.PanelClose.Time, function()
 if not open then
 panel.Visible = false
@@ -2058,6 +2064,29 @@ AutomaticSize = Enum.AutomaticSize.Y,
 LayoutOrder = 1,
 }, { icon, titleLabel, descLabel })
 
+local minLabel = new("TextLabel", {
+Name = "min_value",
+BackgroundTransparency = 1,
+Text = tostring(min),
+FontFace = Theme.CustomFont,
+TextSize = 12,
+TextColor3 = Theme.TextMuted,
+Size = UDim2.fromOffset(30, Theme.Slider.TrackHeight),
+Position = UDim2.fromOffset(12, 0),
+})
+
+local maxLabel = new("TextLabel", {
+Name = "max_value",
+BackgroundTransparency = 1,
+Text = tostring(max),
+FontFace = Theme.CustomFont,
+TextSize = 12,
+TextColor3 = Theme.TextMuted,
+TextXAlignment = Enum.TextXAlignment.Right,
+Size = UDim2.fromOffset(30, Theme.Slider.TrackHeight),
+Position = UDim2.new(1, -42, 0, 0),
+})
+
 local depth = new("ImageLabel", {
 Name = "depth",
 BackgroundTransparency = 1,
@@ -2086,7 +2115,7 @@ BackgroundColor3 = Color3.new(0, 0, 0),
 BackgroundTransparency = 0.7,
 Size = UDim2.new(1, 0, 0, Theme.Slider.TrackHeight),
 LayoutOrder = 2,
-}, { corner(Theme.CornerRadiusPill), trackGlow[1], trackGlow[2], depth, fill })
+}, { corner(Theme.CornerRadiusPill), trackGlow[1], trackGlow[2], depth, fill, minLabel, maxLabel })
 
 local container = surface("Frame", {
 Name = "progressbar",
