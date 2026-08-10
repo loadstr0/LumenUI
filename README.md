@@ -8,7 +8,7 @@ A dark, monochrome Roblox UI library — window chrome, tabs, form elements, dia
 - **Elements** — `Paragraph`, `Button`, `Toggle`, `Section` + `Card` (icon grid), `Slider`, `Keybind`, `Dropdown` (with optional multi-select), `Input`, `Divider`, `ColorPicker`, `ProgressBar`.
 - **Confirm** — a blocking confirmation dialog (`title`, `content`, `callback`).
 - **Notify** — dismissible toast notifications with icon + auto-dismiss duration, same background as the main window (not a flat color fill), fading and sliding in/out. Multiple toasts stack newest-on-top and animate to a new slot whenever one is added or dismissed, instead of snapping.
-- **Config** — tag any stateful element with a `Flag` and save/load its value to disk with `window:SaveConfig`/`window:LoadConfig`, so a hub's settings survive a script restart.
+- **Config** — tag any stateful element with a `Flag` and save/load its value to disk with `window:SaveConfig`/`window:LoadConfig`, so a hub's settings survive a script restart. `Window.new({ AutoSaveConfig = name })` saves automatically whenever the window is destroyed (including the automatic cleanup on reload), so nothing is lost even if you forget to call `SaveConfig` yourself.
 - **Icons** — built-in [Lucide](https://lucide.dev) icon resolver (`Helpers.icon` / `Helpers.withIcon`), used by name (`"home"`, `"settings"`, …) with automatic fallback for unknown names.
 - **Theme** — a single module of colors, fonts, corner radii, and `TweenInfo` presets; override any field to reskin the whole library.
 
@@ -35,6 +35,7 @@ local window = Window.new({
     Title = "My Hub",
     Size = UDim2.fromOffset(620, 470), -- optional
     ToggleKeybind = Enum.KeyCode.RightControl, -- optional
+    AutoSaveConfig = "default", -- optional: saves every Flag automatically when this window is destroyed
 })
 
 local home = window:Tab("home", "Home", "home") -- id, title, Lucide icon name
@@ -101,6 +102,15 @@ local input = home:Input({
 })
 -- input:Set("preset value") -- set programmatically without firing Callback
 
+home:Input({
+    Title = "Max players",
+    NumberOnly = true, -- strips non-numeric characters as you type; Callback still gets a string
+    Value = "10",
+    Callback = function(text)
+        print("Max players:", tonumber(text))
+    end,
+})
+
 local dropdown = home:Dropdown({
     Title = "Map",
     Desc = "Pick one from the list.",
@@ -163,9 +173,10 @@ section:Card({
 
 -- Config persistence: any element created with a Flag (toggle/slider/dropdown above) gets
 -- saved and restored together. Load fires each element's real Callback, so restoring a config
--- actually re-applies its effects, not just the widget's displayed value.
-window:SaveConfig("default")
--- window:LoadConfig("default")
+-- actually re-applies its effects, not just the widget's displayed value. Call this once all
+-- your Flag elements exist - AutoSaveConfig above means you don't need a matching SaveConfig
+-- call; it happens on its own whenever this window is destroyed (including on reload).
+window:LoadConfig("default")
 -- window:ListConfigs() -- { "default" }
 -- window:DeleteConfig("default")
 ```
@@ -176,7 +187,7 @@ window:SaveConfig("default")
 
 | Method | Description |
 |---|---|
-| `Window.new(options)` | Creates a window. `options`: `Name`, `Title`, `Size` (`UDim2`), `ToggleKeybind` (`Enum.KeyCode`). |
+| `Window.new(options)` | Creates a window. `options`: `Name`, `Title`, `Size` (`UDim2`), `ToggleKeybind` (`Enum.KeyCode`), `AutoSaveConfig` (string, optional — config name to save every `Flag`-tagged element to whenever this window is destroyed, including the automatic cleanup on reload). |
 | `window:Tab(id, title, icon)` | Creates (or returns the existing) tab. `icon` is a Lucide icon name. First tab created becomes active automatically. |
 | `window:GoTo(id)` | Switches to a tab by id. |
 | `window:SetVisible(visible)` | Shows/hides the whole window (animated). |
@@ -195,13 +206,13 @@ Every tab returned by `window:Tab(...)` exposes:
 
 | Method | Options |
 |---|---|
-| `tab:Paragraph(options)` | `Title`, `Desc` |
+| `tab:Paragraph(options)` | `Title`, `Desc` — a static text block, or a live status line via its returned `{ SetTitle(self, text), SetDesc(self, text), Destroy(self) }` |
 | `tab:Button(options)` | `Title`, `Desc`, `Icon`, `Callback()` |
 | `tab:Toggle(options)` | `Title`, `Desc`, `Icon`, `Value`, `Flag`, `Callback(value)` — returns `{ Set(self, value), Get(self) }` |
 | `tab:Slider(options)` | `Title`, `Desc`, `Min`, `Max`, `Increment`, `Value`, `Flag`, `Callback(value)` — returns `{ Set(self, value), Get(self) }` |
 | `tab:Keybind(options)` | `Title`, `Desc`, `Icon`, `Value` (`Enum.KeyCode`), `Flag`, `Callback(key)` — `Callback` fires when the *bound* key is pressed, not on rebind (and not on a `Flag`-driven config load either — a config load restores which key is bound, it doesn't simulate a keypress); click the badge to rebind, Escape cancels. Returns `{ Set(self, key), Get(self) }` |
 | `tab:Dropdown(options)` | `Title`, `Desc`, `Icon`, `Options` (array of strings), `Value` (initial selection — a string, or an array of strings when `Multi` is set), `Multi` (bool, optional — allow selecting several options without closing the list), `Flag`, `Callback(value)` — `value` is a string normally, or an array of strings when `Multi` is set. Returns `{ Set(self, value), Get(self), SetOptions(self, newOptions) }` |
-| `tab:Input(options)` | `Title`, `Desc`, `Icon`, `Placeholder`, `Value` (initial text), `Flag`, `Callback(text, enterPressed)` — fires on `FocusLost` (Enter or clicking away), not every keystroke. Returns `{ Set(self, text), Get(self) }` |
+| `tab:Input(options)` | `Title`, `Desc`, `Icon`, `Placeholder`, `Value` (initial text), `NumberOnly` (bool, optional — strips non-numeric characters as you type; `Callback` still receives a string), `Flag`, `Callback(text, enterPressed)` — fires on `FocusLost` (Enter or clicking away), not every keystroke. Returns `{ Set(self, text), Get(self) }` |
 | `tab:Divider(options?)` | `Title` (optional) — a thin rule for breaking a tab into visual groups |
 | `tab:ColorPicker(options)` | `Title`, `Desc`, `Icon`, `Value` (`Color3`), `Flag`, `Callback(color)` — click the swatch to expand a saturation/value square + hue bar. Returns `{ Set(self, color), Get(self) }` |
 | `tab:ProgressBar(options)` | `Title`, `Desc`, `Icon`, `Min`, `Max`, `Value` — read-only display, no `Callback`; call `:Set(value)` to update it as your own state changes. Returns `{ Set(self, value), Get(self) }` |

@@ -1081,6 +1081,28 @@ options.Callback(textBox.Text, enterPressed)
 end
 end
 
+if options.NumberOnly then
+textBox:GetPropertyChangedSignal("Text"):Connect(function()
+local raw = textBox.Text
+local negative = raw:sub(1, 1) == "-"
+local digits = raw:gsub("[^%d%.]", "")
+local seenDot = false
+digits = digits:gsub(".", function(char)
+if char == "." then
+if seenDot then
+return ""
+end
+seenDot = true
+end
+return char
+end)
+local sanitized = (negative and "-" or "") .. digits
+if sanitized ~= raw then
+textBox.Text = sanitized
+end
+end)
+end
+
 textBox.FocusLost:Connect(function(enterPressed)
 fireCallback(enterPressed)
 end)
@@ -3081,6 +3103,8 @@ LastSize = mainFrame.Size,
 Connections = {},
 
 Flags = {},
+
+AutoSaveConfigName = options.AutoSaveConfig,
 }, Window)
 
 self:_wireChrome(handle, controls, resizeButton, resizeDisabled, fullscreenButton, fullscreenIcon, resizeHandle, menuButton, menuBackdrop, layer, maxSize)
@@ -3465,6 +3489,12 @@ end
 function Window:Destroy()
 if self.Destroyed then
 return
+end
+
+if self.AutoSaveConfigName then
+pcall(function()
+ctx:Require("Config").Save(self, self.AutoSaveConfigName)
+end)
 end
 self.Destroyed = true
 for _, connection in ipairs(self.Connections) do
