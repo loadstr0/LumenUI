@@ -89,7 +89,60 @@ function Patterns.attack(root, index, count, now, localRoot, targetRoot, shot)
     local aim = aimPoint - localRoot.Position
     local direction = aim.Magnitude > 2 and aim.Unit or localRoot.CFrame.LookVector
 
-    if shot.kind == "Shockwave" then
+    if shot.kind == "Seismic Line" then
+        local origin = shot.originPoint or localRoot.Position
+        local path = aimPoint - origin
+        local steps = 12
+        local step = (index - 1) % steps + 1
+        local layer = math.floor((index - 1) / steps)
+        local trigger = (step - 1) * 0.11
+        local point = origin:Lerp(aimPoint, step / steps) + Vector3.new(0, 1 + layer * 0.7, 0)
+        if elapsed < trigger then
+            return clampVelocity((point - root.Position) * 16 - root.AssemblyLinearVelocity * 0.35, 260)
+        end
+        if elapsed < trigger + 0.38 then
+            local flat = Vector3.new(path.X, 0, path.Z)
+            local forward = flat.Magnitude > 0.1 and flat.Unit or Vector3.new(0, 0, -1)
+            local side = Vector3.new(-forward.Z, 0, forward.X)
+            local eruption = side * math.sin(phase) * (65 + layer * 8) + forward * 35
+            return eruption + Vector3.new(0, 245 + layer * 18, 0)
+        end
+        return root.AssemblyLinearVelocity * 0.96
+    elseif shot.kind == "Railgun" then
+        local muzzle = localRoot.Position + Vector3.new(0, 6, 0) + direction * 8
+        local frame = CFrame.lookAt(muzzle, muzzle + direction)
+        local coilAngle = phase * 3 + now * 11
+        local coilRadius = 2.4 + lane * 0.55
+        if elapsed < 0.9 then
+            local depth = ((index - 1) / math.max(count, 1) - 0.5) * 12
+            local goal = muzzle + direction * depth + frame.RightVector * math.cos(coilAngle) * coilRadius + frame.UpVector * math.sin(coilAngle) * coilRadius
+            return clampVelocity((goal - root.Position) * 22 - root.AssemblyLinearVelocity * 0.5, 320)
+        end
+        local travel = (elapsed - 0.9) * 235 + index / math.max(count, 1) * 38
+        local lance = muzzle + direction * travel + frame.RightVector * math.cos(coilAngle) * 0.8 + frame.UpVector * math.sin(coilAngle) * 0.8
+        return clampVelocity((lance - root.Position) * 20 + direction * 210, 430)
+    elseif shot.kind == "Gravity Wave" then
+        local ring = (index - 1) % 4
+        local ringPhase = phase + ring * 0.35
+        local radius = 5 + elapsed * 68 + ring * 7
+        local goal = aimPoint + Vector3.new(math.cos(ringPhase) * radius, 3 + math.sin(now * 5 + index) * 2.5, math.sin(ringPhase) * radius)
+        local radial = Vector3.new(math.cos(ringPhase), 0.12, math.sin(ringPhase)).Unit
+        return clampVelocity((goal - root.Position) * 13 + radial * (115 + ring * 15), 350)
+    elseif shot.kind == "Meteor Forge" then
+        local forge = aimPoint + Vector3.new(0, 72, 0)
+        if elapsed < 1.45 then
+            local orbit = phase + now * (4.5 + lane * 0.2)
+            local radius = 7 + lane * 1.5
+            local goal = forge + Vector3.new(math.cos(orbit) * radius, math.sin(phase * 2 + now * 3) * 6, math.sin(orbit) * radius)
+            return clampVelocity((goal - root.Position) * 18 - root.AssemblyLinearVelocity * 0.4, 320)
+        elseif elapsed < 2.55 then
+            local impact = aimPoint + Vector3.new(math.cos(phase) * lane * 0.65, 1, math.sin(phase) * lane * 0.65)
+            return clampVelocity((impact - root.Position) * 19 + Vector3.new(0, -210, 0), 410)
+        end
+        local offset = root.Position - aimPoint
+        local outward = offset.Magnitude > 0.2 and offset.Unit or Vector3.new(math.cos(phase), 0.4, math.sin(phase)).Unit
+        return outward * 330 + Vector3.new(0, 105, 0)
+    elseif shot.kind == "Shockwave" then
         local offset = root.Position - aimPoint
         local outward = offset.Magnitude > 0.1 and offset.Unit or Vector3.new(math.cos(phase), 0.2, math.sin(phase)).Unit
         return outward * (180 + lane * 25) + Vector3.new(0, 38, 0)

@@ -26,6 +26,14 @@ function Main.start(deps, liveState)
         constructFrame = nil,
         destructionRadius = 42,
         destructionForce = 285,
+        smartTargeting = true,
+        aimBeacon = false,
+        beaconCount = 4,
+        comboName = "Cataclysm Protocol",
+        comboQueue = {},
+        comboGapUntil = nil,
+        safetyCorridor = true,
+        safetyRadius = 12,
         nextDisaster = "Earthquake",
         controlled = {},
         peak = 0,
@@ -51,7 +59,7 @@ function Main.start(deps, liveState)
         avatarTrack = nil,
     }
     local ctx = {player = player, state = state}
-    local effectToggle, constructToggle
+    local effectToggle, constructToggle, beaconToggle
     local mouse = player:GetMouse()
     local camera = workspace.CurrentCamera
 
@@ -146,7 +154,8 @@ function Main.start(deps, liveState)
             end
         end
         table.sort(roots, function(a, b)
-            return (a.Position - origin).Magnitude + a.AssemblyMass * 0.08 < (b.Position - origin).Magnitude + b.AssemblyMass * 0.08
+            return deps.Targeting.priority(a, origin, state.oneShot, state.smartTargeting)
+                < deps.Targeting.priority(b, origin, state.oneShot, state.smartTargeting)
         end)
         table.clear(state.controlled)
         for index = 1, math.min(state.maxParts, #roots) do state.controlled[index] = roots[index] end
@@ -157,6 +166,8 @@ function Main.start(deps, liveState)
         state.effectEnabled = false
         state.constructEnabled = false
         state.oneShot = nil
+        state.comboGapUntil = nil
+        table.clear(state.comboQueue)
         for _, root in ipairs(state.controlled) do
             if root and root.Parent then
                 root.AssemblyLinearVelocity = Vector3.zero
@@ -168,22 +179,41 @@ function Main.start(deps, liveState)
     local function stopAll()
         if effectToggle then effectToggle:Set(false) end
         if constructToggle then constructToggle:Set(false) end
+        if beaconToggle then beaconToggle:Set(false) end
         stopParts()
     end
 
-    local function beginShot(kind, duration)
+    local function beginShot(kind, duration, fromCombo)
         if effectToggle then effectToggle:Set(false) end
         if constructToggle then constructToggle:Set(false) end
+        if not fromCombo then
+            state.comboGapUntil = nil
+            table.clear(state.comboQueue)
+        end
         state.effectEnabled = false
         state.constructEnabled = false
+        local root = characterRoot(player)
         state.oneShot = {
             kind = kind,
             started = os.clock(),
             duration = duration,
             aimPoint = state.aimPoint or rawAimPoint(),
+            originPoint = root and root.Position or Vector3.zero,
             destructionRadius = state.destructionRadius,
             destructionForce = state.destructionForce,
         }
+        refreshOwned()
+        deps.Defense.refreshCollisionGuards(ctx)
+    end
+
+    local function beginCombo()
+        if effectToggle then effectToggle:Set(false) end
+        if constructToggle then constructToggle:Set(false) end
+        state.effectEnabled = false
+        state.constructEnabled = false
+        state.oneShot = nil
+        state.comboQueue = deps.Sequences.combo(state.comboName)
+        state.comboGapUntil = os.clock()
     end
 
     local window = Window.new({
@@ -252,15 +282,23 @@ function Main.start(deps, liveState)
     powers:Paragraph({Title = "Replicated cinematic attacks", Desc = "The moving map assemblies are the visual effect, so observers receive the same physics. Mouse World continuously follows your pointer during aimed attacks."})
     powers:Dropdown({Title = "Aim mode", Icon = "crosshair", Options = {"Mouse World", "Selected Player", "Forward"}, Value = "Mouse World", Callback = function(value) state.aimMode = value end})
     powers:Slider({Title = "Aim range", Min = 60, Max = 300, Increment = 10, Value = 180, Callback = function(value) state.aimDistance = value end})
+    beaconToggle = powers:Toggle({Title = "Replicated aim beacon", Desc = "Reserves four network-owned assemblies to mark the live impact point for every observer.", Icon = "locate-fixed", Value = false, Callback = function(value) state.aimBeacon = value end})
+    powers:Toggle({Title = "Smart structural targeting", Desc = "Destruction powers prioritize nearby broad wall, roof, and heavy loose assemblies.", Icon = "scan-search", Value = true, Callback = function(value) state.smartTargeting = value; refreshOwned() end})
     powers:Slider({Title = "Destruction radius", Min = 12, Max = 80, Increment = 2, Value = 42, Callback = function(value) state.destructionRadius = value end})
     powers:Slider({Title = "Blast force", Min = 100, Max = 420, Increment = 10, Value = 285, Callback = function(value) state.destructionForce = value end})
-    powers:Button({Title = "Atomic Breath", Desc = "Charge formation followed by a long aimed debris beam.", Icon = "flame", Callback = function() beginShot("Atomic Breath", 2.8) end})
-    powers:Button({Title = "Meteor Rain", Desc = "A collidable meteor grid falls onto the target.", Icon = "cloud-lightning", Callback = function() beginShot("Meteor Rain", 3.0) end})
-    powers:Button({Title = "Singularity Collapse", Desc = "Crushes debris inward, then detonates it.", Icon = "circle-dot", Callback = function() beginShot("Singularity", 2.4) end})
-    powers:Button({Title = "Kaiju Stomp", Desc = "Low radial blast for players and structures.", Icon = "footprints", Callback = function() beginShot("Kaiju Stomp", 1.5) end})
-    powers:Button({Title = "Expanding Shockwave", Icon = "radio-tower", Callback = function() beginShot("Shockwave", 1.35) end})
-    powers:Button({Title = "Comet Volley", Icon = "rocket", Callback = function() beginShot("Comet", 1.8) end})
-    powers:Button({Title = "Demolition Pulse", Desc = "Blasts nearby loose, network-owned assemblies away from the aim point. Anchored map geometry cannot be deleted client-side.", Icon = "bomb", Callback = function() beginShot("Demolition Pulse", 1.1) end})
+    powers:Button({Title = "Seismic Line", Desc = "A chained row of replicated debris eruptions travels from you to the aim point.", Icon = "activity", Callback = function() beginShot("Seismic Line", deps.Sequences.duration("Seismic Line")) end})
+    powers:Button({Title = "Railgun", Desc = "Compresses debris into a rotating core, then fires the whole formation down the aim line.", Icon = "crosshair", Callback = function() beginShot("Railgun", deps.Sequences.duration("Railgun")) end})
+    powers:Button({Title = "Gravity Wave", Desc = "Expanding physical rings sweep loose structures away from the impact center.", Icon = "radio", Callback = function() beginShot("Gravity Wave", deps.Sequences.duration("Gravity Wave")) end})
+    powers:Button({Title = "Meteor Forge", Desc = "Builds a rotating debris meteor overhead and slams it into the selected point.", Icon = "orbit", Callback = function() beginShot("Meteor Forge", deps.Sequences.duration("Meteor Forge")) end})
+    powers:Button({Title = "Atomic Breath", Desc = "Charge formation followed by a long aimed debris beam.", Icon = "flame", Callback = function() beginShot("Atomic Breath", deps.Sequences.duration("Atomic Breath")) end})
+    powers:Button({Title = "Meteor Rain", Desc = "A collidable meteor grid falls onto the target.", Icon = "cloud-lightning", Callback = function() beginShot("Meteor Rain", deps.Sequences.duration("Meteor Rain")) end})
+    powers:Button({Title = "Singularity Collapse", Desc = "Crushes debris inward, then detonates it.", Icon = "circle-dot", Callback = function() beginShot("Singularity", deps.Sequences.duration("Singularity")) end})
+    powers:Button({Title = "Kaiju Stomp", Desc = "Low radial blast for players and structures.", Icon = "footprints", Callback = function() beginShot("Kaiju Stomp", deps.Sequences.duration("Kaiju Stomp")) end})
+    powers:Button({Title = "Expanding Shockwave", Icon = "radio-tower", Callback = function() beginShot("Shockwave", deps.Sequences.duration("Shockwave")) end})
+    powers:Button({Title = "Comet Volley", Icon = "rocket", Callback = function() beginShot("Comet", deps.Sequences.duration("Comet")) end})
+    powers:Button({Title = "Demolition Pulse", Desc = "Blasts nearby loose, network-owned assemblies away from the aim point. Anchored map geometry cannot be deleted client-side.", Icon = "bomb", Callback = function() beginShot("Demolition Pulse", deps.Sequences.duration("Demolition Pulse")) end})
+    powers:Dropdown({Title = "Combo", Icon = "list-ordered", Options = deps.Sequences.comboNames(), Value = "Cataclysm Protocol", Callback = function(value) state.comboName = value end})
+    powers:Button({Title = "Execute combo", Desc = "Chains the selected sequence with a short reset between powers.", Icon = "sparkles", Callback = beginCombo})
     powers:Button({Title = "Emergency stop", Icon = "octagon-x", Callback = stopAll})
 
     local defense = window:Tab("defense", "Defense", "shield")
@@ -271,6 +309,8 @@ function Main.start(deps, liveState)
         state.selfNoCollide = value
         deps.Defense.refreshCollisionGuards(ctx)
     end})
+    defense:Toggle({Title = "Predictive safety corridor", Desc = "Ejects debris predicted to enter the protected capsule around your avatar.", Icon = "shield-check", Value = true, Callback = function(value) state.safetyCorridor = value end})
+    defense:Slider({Title = "Safety radius", Min = 8, Max = 24, Increment = 1, Value = 12, Callback = function(value) state.safetyRadius = value end})
     defense:Toggle({Title = "Anti-fall impact", Icon = "umbrella", Value = true, Callback = function(value) state.antiFall = value end})
     defense:Toggle({Title = "Void recovery", Icon = "rotate-ccw", Value = true, Callback = function(value) state.autoRecover = value end})
     defense:Button({Title = "Save current position", Icon = "map-pin", Callback = function() deps.Defense.savePosition(ctx) end})
@@ -324,9 +364,15 @@ function Main.start(deps, liveState)
         if localRoot then
             local nextAim = rawAimPoint()
             state.aimPoint = state.aimPoint and state.aimPoint:Lerp(nextAim, math.clamp(dt * 12, 0, 1)) or nextAim
-            if state.oneShot and (state.oneShot.kind == "Atomic Breath" or state.oneShot.kind == "Comet") then
+            if state.oneShot and (state.oneShot.kind == "Atomic Breath" or state.oneShot.kind == "Comet" or state.oneShot.kind == "Railgun") then
                 state.oneShot.aimPoint = state.aimPoint
             end
+        end
+
+        if not state.oneShot and state.comboGapUntil and now >= state.comboGapUntil then
+            local nextKind = table.remove(state.comboQueue, 1)
+            state.comboGapUntil = nil
+            if nextKind then beginShot(nextKind, deps.Sequences.duration(nextKind), true) end
         end
 
         if now - state.lastSimBoost >= 0.5 then
@@ -334,7 +380,7 @@ function Main.start(deps, liveState)
             pcall(sethiddenproperty, player, "MaximumSimulationRadius", deps.Config.SimulationRadius)
             pcall(sethiddenproperty, player, "SimulationRadius", deps.Config.SimulationRadius)
         end
-        if now - state.lastScan >= deps.Config.ScanInterval then state.lastScan = now; refreshOwned() end
+        if not state.oneShot and now - state.lastScan >= deps.Config.ScanInterval then state.lastScan = now; refreshOwned() end
         if now - state.lastCollisionRefresh >= 2 then
             state.lastCollisionRefresh = now
             deps.Defense.refreshCollisionGuards(ctx)
@@ -346,42 +392,45 @@ function Main.start(deps, liveState)
 
         if now - state.lastStatus >= 0.25 then
             state.lastStatus = now
-            local active = state.oneShot and state.oneShot.kind or (state.constructEnabled and state.construct) or (state.effectEnabled and state.mode) or "Idle"
-            status:SetDesc(string.format("Owned: %d | Peak: %d | Active: %s | Target: %s | Shield: %s", #state.controlled, state.peak, active, state.targetName, state.invulnerable and "ON" or "OFF"))
+            local active = state.oneShot and state.oneShot.kind or (state.comboGapUntil and "Combo charging") or (state.constructEnabled and state.construct) or (state.effectEnabled and state.mode) or (state.aimBeacon and "Aim Beacon") or "Idle"
+            status:SetDesc(string.format("Owned: %d | Peak: %d | Active: %s | Target: %s | Beacon: %s | Shield: %s", #state.controlled, state.peak, active, state.targetName, state.aimBeacon and "ON" or "OFF", state.invulnerable and "ON" or "OFF"))
         end
 
         state.accumulator += dt
         if state.accumulator < 1 / deps.Config.PhysicsRate then return end
         state.accumulator = 0
         if not localRoot or #state.controlled == 0 then return end
-        if not state.effectEnabled and not state.constructEnabled and not state.oneShot then return end
+        if not state.effectEnabled and not state.constructEnabled and not state.oneShot and not state.aimBeacon then return end
 
         local targetRoot = characterRoot(selectedTarget()) or localRoot
         local viewers = audienceRoots()
         local count = #state.controlled
+        local beaconCount = state.aimBeacon and math.min(state.beaconCount, count) or 0
+        local effectCount = math.max(0, count - beaconCount)
         for index, root in ipairs(state.controlled) do
             if root and root.Parent then
                 local velocity
-                if state.oneShot then
-                    velocity = deps.Patterns.attack(root, index, count, now, localRoot, targetRoot, state.oneShot)
+                local isBeacon = beaconCount > 0 and index > effectCount
+                if isBeacon then
+                    velocity = deps.Targeting.beacon(root, index - effectCount, beaconCount, now, state.aimPoint or targetRoot.Position)
+                elseif state.oneShot then
+                    velocity = deps.Patterns.attack(root, index, math.max(effectCount, 1), now, localRoot, targetRoot, state.oneShot)
                 elseif state.constructEnabled then
-                    local goal, tangent = deps.Patterns.construct(state.construct, index, count, now, localRoot, targetRoot, state)
+                    local goal, tangent = deps.Patterns.construct(state.construct, index, math.max(effectCount, 1), now, localRoot, targetRoot, state)
                     local raw = (goal - root.Position) * (state.strength + 3) - root.AssemblyLinearVelocity * 0.75 + tangent
                     velocity = raw.Magnitude > 300 and raw.Unit * 300 or raw
-                else
-                    local goal, tangent = deps.Patterns.continuous(state.mode, index, count, now, localRoot, targetRoot, viewers, state)
+                elseif state.effectEnabled then
+                    local goal, tangent = deps.Patterns.continuous(state.mode, index, math.max(effectCount, 1), now, localRoot, targetRoot, viewers, state)
                     local raw = (goal - root.Position) * state.strength + tangent
                     velocity = raw.Magnitude > 285 and raw.Unit * 285 or raw
                 end
-                if state.selfNoCollide then
-                    local separation = root.Position - localRoot.Position
-                    if separation.Magnitude < 11 then
-                        local away = separation.Magnitude > 0.2 and separation.Unit or localRoot.CFrame.LookVector
-                        velocity = away * 190 + Vector3.new(0, 55, 0)
-                    end
+                if state.safetyCorridor then
+                    velocity = deps.Targeting.safetyVelocity(root, localRoot, state.safetyRadius) or velocity
                 end
                 if velocity then root.AssemblyLinearVelocity = velocity end
-                if state.constructEnabled and not state.oneShot then
+                if isBeacon then
+                    root.AssemblyAngularVelocity = Vector3.new(0, 8, 0)
+                elseif state.constructEnabled and not state.oneShot then
                     root.AssemblyAngularVelocity = Vector3.zero
                 elseif velocity then
                     root.AssemblyAngularVelocity = Vector3.new(10 + index % 5 * 3, 17, 8 + index % 7)
@@ -397,6 +446,7 @@ function Main.start(deps, liveState)
                     root.AssemblyAngularVelocity = Vector3.zero
                 end
             end
+            if #state.comboQueue > 0 then state.comboGapUntil = now + 0.28 end
         end
     end)
 

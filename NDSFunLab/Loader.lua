@@ -37,6 +37,8 @@ local dependencies = {
     Patterns = fetch("NDSFunLab/PhysicsPatterns.lua"),
     Defense = fetch("NDSFunLab/Defense.lua"),
     Avatar = fetch("NDSFunLab/Avatar.lua"),
+    Sequences = fetch("NDSFunLab/PowerSequences.lua"),
+    Targeting = fetch("NDSFunLab/Targeting.lua"),
 }
 
 return fetch("NDSFunLab/Main.lua").start(dependencies, liveState)
