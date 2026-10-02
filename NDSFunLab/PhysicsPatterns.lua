@@ -13,55 +13,18 @@ end
 
 function Patterns.construct(kind, index, count, now, anchorRoot, targetRoot, state)
     local t = (index - 1) / math.max(1, count - 1)
-    local base = horizontalFrame(anchorRoot)
+    local base = state.constructFrame or horizontalFrame(anchorRoot) * CFrame.new(0, 0, -45)
     local point
 
-    if kind == "Godzilla" then
-        if t < 0.28 then
-            local k = t / 0.28
-            point = Vector3.new(math.sin(k * math.pi * 4) * 2.3, 3 + k * 23, 1)
-        elseif t < 0.50 then
-            local k = (t - 0.28) / 0.22
-            point = Vector3.new(math.sin(k * math.pi * 2) * (2 + k * 3), 8 - k * 5, 4 + k * 42)
-        elseif t < 0.70 then
-            local k = (t - 0.50) / 0.20
-            local side = index % 2 == 0 and -1 or 1
-            point = Vector3.new(side * (3.5 + k * 2), 1 + k * 11, 2)
-        elseif t < 0.84 then
-            local k = (t - 0.70) / 0.14
-            local side = index % 2 == 0 and -1 or 1
-            point = Vector3.new(side * (4 + k * 14), 19 - k * 6, -1 - k * 3)
-        elseif t < 0.95 then
-            local k = (t - 0.84) / 0.11
-            local angle = k * math.pi * 2
-            point = Vector3.new(math.cos(angle) * 5, 27 + math.sin(angle) * 3, -3 - math.abs(math.cos(angle)) * 3)
-        else
-            local k = (t - 0.95) / 0.05
-            point = Vector3.new(0, 12 + k * 13, 4 + math.sin(k * math.pi * 4) * 2)
-        end
-    elseif kind == "Sky Serpent" then
+    if kind == "Sky Serpent" then
         point = Vector3.new(
             math.sin(t * math.pi * 7 + now * 1.8) * 12,
             18 + math.sin(t * math.pi * 5 + now * 2.2) * 9,
             (t - 0.35) * 95
         )
-    elseif kind == "Titan Mech" then
-        local slot = index % 8
-        local layer = math.floor((index - 1) / 8)
-        local y = 2 + layer * 3.3
-        local width = y < 11 and 5 or (y < 22 and 8 or 4)
-        if slot < 2 then
-            point = Vector3.new(slot == 0 and -width or width, y, 1)
-        elseif slot < 4 then
-            point = Vector3.new(slot == 2 and -width or width, y, -2)
-        elseif slot < 6 then
-            point = Vector3.new(slot == 4 and -width * 1.8 or width * 1.8, math.min(y, 19), 0)
-        else
-            point = Vector3.new(slot == 6 and -2 or 2, y, 3)
-        end
     elseif kind == "Orbital Gate" then
         local angle = t * math.pi * 2 + now * state.speed
-        local center = targetRoot.Position + Vector3.new(0, 9, 0)
+        local center = base:PointToWorldSpace(Vector3.new(0, 16, 0))
         return center + base.RightVector * (math.cos(angle) * state.radius) + Vector3.yAxis * (math.sin(angle) * state.radius), base.LookVector * (25 + index % 3 * 8)
     elseif kind == "World Tree" then
         if t < 0.45 then
@@ -74,11 +37,11 @@ function Patterns.construct(kind, index, count, now, anchorRoot, targetRoot, sta
             local spread = 7 + k * 18
             point = Vector3.new(math.cos(angle) * spread, 25 + math.sin(k * math.pi * 4) * 8, math.sin(angle) * spread)
         end
-    else
+    else -- UFO
         local angle = t * math.pi * 10 + now * state.speed
         local ring = index % 3
         local radius = 6 + ring * 7
-        local center = targetRoot.Position + Vector3.new(0, 22 + math.sin(now * 1.5) * 3, 0)
+        local center = base:PointToWorldSpace(Vector3.new(0, 22 + math.sin(now * 1.5) * 3, 0))
         return center + Vector3.new(math.cos(angle) * radius, (ring - 1) * 2.5, math.sin(angle) * radius), Vector3.new(0, math.sin(now * 5 + index) * 8, 0)
     end
 
@@ -122,15 +85,16 @@ function Patterns.attack(root, index, count, now, localRoot, targetRoot, shot)
     local elapsed = now - shot.started
     local phase = ((index - 1) / math.max(1, count)) * math.pi * 2
     local lane = (index - 1) % 5
-    local aim = targetRoot.Position - localRoot.Position
-    local direction = targetRoot ~= localRoot and aim.Magnitude > 2 and aim.Unit or localRoot.CFrame.LookVector
+    local aimPoint = shot.aimPoint or targetRoot.Position
+    local aim = aimPoint - localRoot.Position
+    local direction = aim.Magnitude > 2 and aim.Unit or localRoot.CFrame.LookVector
 
     if shot.kind == "Shockwave" then
-        local offset = root.Position - targetRoot.Position
+        local offset = root.Position - aimPoint
         local outward = offset.Magnitude > 0.1 and offset.Unit or Vector3.new(math.cos(phase), 0.2, math.sin(phase)).Unit
         return outward * (180 + lane * 25) + Vector3.new(0, 38, 0)
     elseif shot.kind == "Comet" then
-        return clampVelocity((targetRoot.Position + targetRoot.AssemblyLinearVelocity * 0.2 + Vector3.new(0, 2, 0) - root.Position) * 16, 310)
+        return clampVelocity((aimPoint - root.Position) * 16, 310)
     elseif shot.kind == "Atomic Breath" then
         local mouth = localRoot.Position + Vector3.new(0, 6, 0) + direction * 7
         if elapsed < 0.75 then
@@ -140,11 +104,11 @@ function Patterns.attack(root, index, count, now, localRoot, targetRoot, shot)
         local beam = mouth + direction * (15 + index / count * 105) + Vector3.new(math.cos(phase) * lane * 0.6, math.sin(phase) * lane * 0.6, 0)
         return clampVelocity((beam - root.Position) * 24 + direction * 170, 360)
     elseif shot.kind == "Meteor Rain" then
-        local sky = targetRoot.Position + Vector3.new(((index - 1) % 9 - 4) * 8, 70 + lane * 7, (math.floor((index - 1) / 9) % 7 - 3) * 8)
+        local sky = aimPoint + Vector3.new(((index - 1) % 9 - 4) * 8, 70 + lane * 7, (math.floor((index - 1) / 9) % 7 - 3) * 8)
         if elapsed < 1.15 then return clampVelocity((sky - root.Position) * 14, 280) end
         return Vector3.new(math.sin(index * 9) * 18, -300 - lane * 15, math.cos(index * 7) * 18)
     elseif shot.kind == "Singularity" then
-        local center = targetRoot.Position + Vector3.new(0, 5, 0)
+        local center = aimPoint + Vector3.new(0, 5, 0)
         if elapsed < 1.5 then
             local spiral = center + Vector3.new(math.cos(phase + now * 8) * 3, math.sin(phase * 2) * 3, math.sin(phase + now * 8) * 3)
             return clampVelocity((spiral - root.Position) * 22, 330)
@@ -152,6 +116,12 @@ function Patterns.attack(root, index, count, now, localRoot, targetRoot, shot)
         local outward = root.Position - center
         outward = outward.Magnitude > 0.2 and outward.Unit or Vector3.new(math.cos(phase), 0.35, math.sin(phase)).Unit
         return outward * 340 + Vector3.new(0, 70, 0)
+    elseif shot.kind == "Demolition Pulse" then
+        local offset = root.Position - aimPoint
+        if offset.Magnitude > (shot.destructionRadius or 42) then return nil end
+        local outward = offset.Magnitude > 0.2 and offset.Unit or Vector3.new(math.cos(phase), 0.25, math.sin(phase)).Unit
+        local falloff = 1 - math.clamp(offset.Magnitude / math.max(1, shot.destructionRadius or 42), 0, 0.8)
+        return outward * (shot.destructionForce or 285) * falloff + Vector3.new(0, 65 * falloff, 0)
     end
 
     local offset = Vector3.new(root.Position.X - localRoot.Position.X, 0, root.Position.Z - localRoot.Position.Z)

@@ -13,13 +13,20 @@ function Main.start(deps, liveState)
         effectEnabled = false,
         constructEnabled = false,
         mode = "Halo",
-        construct = "Godzilla",
+        construct = "Orbital Gate",
         radius = 16,
         speed = 2.5,
         strength = 9,
         maxParts = deps.Config.DefaultMaxParts,
         massCap = deps.Config.DefaultMassCap,
         targetName = "Self",
+        aimMode = "Mouse World",
+        aimDistance = 180,
+        aimPoint = nil,
+        constructFrame = nil,
+        destructionRadius = 42,
+        destructionForce = 285,
+        nextDisaster = "Earthquake",
         controlled = {},
         peak = 0,
         lastScan = 0,
@@ -37,11 +44,16 @@ function Main.start(deps, liveState)
         safeCFrame = nil,
         forceField = nil,
         defenseConnections = {},
+        collisionGuards = {},
+        selfNoCollide = true,
+        lastCollisionRefresh = 0,
         avatarCyclone = false,
         avatarTrack = nil,
     }
     local ctx = {player = player, state = state}
     local effectToggle, constructToggle
+    local mouse = player:GetMouse()
+    local camera = workspace.CurrentCamera
 
     local okSim, originalSimulationRadius = pcall(gethiddenproperty, player, "SimulationRadius")
     local okMax, originalMaximumRadius = pcall(gethiddenproperty, player, "MaximumSimulationRadius")
@@ -55,6 +67,32 @@ function Main.start(deps, liveState)
 
     local function selectedTarget()
         return state.targetName == "Self" and player or Players:FindFirstChild(state.targetName) or player
+    end
+
+    local function flatFrame(root)
+        local look = root.CFrame.LookVector
+        local flat = Vector3.new(look.X, 0, look.Z)
+        if flat.Magnitude < 0.01 then flat = Vector3.new(0, 0, -1) end
+        return CFrame.lookAt(root.Position, root.Position + flat.Unit)
+    end
+
+    local function rawAimPoint()
+        local localRoot = characterRoot(player)
+        if not localRoot then return Vector3.zero end
+        if state.aimMode == "Selected Player" then
+            local targetRoot = characterRoot(selectedTarget())
+            return targetRoot and targetRoot.Position + Vector3.new(0, 3, 0) or localRoot.Position
+        end
+        if state.aimMode == "Forward" then
+            return localRoot.Position + localRoot.CFrame.LookVector * state.aimDistance + Vector3.new(0, 3, 0)
+        end
+        camera = workspace.CurrentCamera or camera
+        local ray = mouse.UnitRay
+        local parameters = RaycastParams.new()
+        parameters.FilterType = Enum.RaycastFilterType.Exclude
+        parameters.FilterDescendantsInstances = player.Character and {player.Character} or {}
+        local result = workspace:Raycast(ray.Origin, ray.Direction * state.aimDistance, parameters)
+        return result and result.Position or ray.Origin + ray.Direction * state.aimDistance
     end
 
     local function playerOptions()
@@ -138,7 +176,14 @@ function Main.start(deps, liveState)
         if constructToggle then constructToggle:Set(false) end
         state.effectEnabled = false
         state.constructEnabled = false
-        state.oneShot = {kind = kind, started = os.clock(), duration = duration}
+        state.oneShot = {
+            kind = kind,
+            started = os.clock(),
+            duration = duration,
+            aimPoint = state.aimPoint or rawAimPoint(),
+            destructionRadius = state.destructionRadius,
+            destructionForce = state.destructionForce,
+        }
     end
 
     local window = Window.new({
@@ -174,8 +219,8 @@ function Main.start(deps, liveState)
     physicsTab:Button({Title = "Stop every part effect", Icon = "square", Callback = stopAll})
 
     local constructs = window:Tab("constructs", "Constructs", "blocks")
-    constructs:Paragraph({Title = "Replicated debris sculptures", Desc = "Build moving creatures and monuments from real map assemblies. They remain collidable and visible to everyone."})
-    constructs:Dropdown({Title = "Construction", Icon = "hammer", Options = {"Godzilla", "Sky Serpent", "Titan Mech", "Orbital Gate", "World Tree", "UFO"}, Value = "Godzilla", Callback = function(value) state.construct = value end})
+    constructs:Paragraph({Title = "Replicated debris forms", Desc = "Only shapes that stay readable with irregular map assemblies are included. They build about 45 studs ahead of you and are visible to the server."})
+    constructs:Dropdown({Title = "Construction", Icon = "hammer", Options = {"Orbital Gate", "UFO", "Sky Serpent", "World Tree"}, Value = "Orbital Gate", Callback = function(value) state.construct = value end})
     constructToggle = constructs:Toggle({
         Title = "Build and animate",
         Icon = "sparkles",
@@ -183,6 +228,8 @@ function Main.start(deps, liveState)
         Callback = function(value)
             state.constructEnabled = value
             if value then
+                local root = characterRoot(player)
+                state.constructFrame = root and flatFrame(root) * CFrame.new(0, 0, -45) or nil
                 state.effectEnabled = false
                 effectToggle:Set(false)
             elseif not state.oneShot then
@@ -190,23 +237,40 @@ function Main.start(deps, liveState)
             end
         end,
     })
-    constructs:Button({Title = "Awaken Godzilla", Desc = "Builds the kaiju; combine it with Atomic Breath on the Powers tab.", Icon = "flame", Callback = function() state.construct = "Godzilla"; state.constructEnabled = true; state.effectEnabled = false; constructToggle:Set(true); effectToggle:Set(false) end})
+    constructs:Button({Title = "Rebuild ahead of me", Desc = "Captures a new safe construction point 45 studs forward.", Icon = "move-up-right", Callback = function()
+        local root = characterRoot(player)
+        if not root then return end
+        state.constructFrame = flatFrame(root) * CFrame.new(0, 0, -45)
+        state.constructEnabled = true
+        state.effectEnabled = false
+        constructToggle:Set(true)
+        effectToggle:Set(false)
+    end})
     constructs:Button({Title = "Collapse construction", Icon = "bomb", Callback = stopAll})
 
     local powers = window:Tab("powers", "Powers", "zap")
-    powers:Paragraph({Title = "Cinematic attacks", Desc = "Each attack takes temporary control of every available assembly, then releases it automatically."})
-    powers:Button({Title = "Atomic Breath", Desc = "Charge orb + 100-stud physical debris beam.", Icon = "flame", Callback = function() beginShot("Atomic Breath", 2.6) end})
+    powers:Paragraph({Title = "Replicated cinematic attacks", Desc = "The moving map assemblies are the visual effect, so observers receive the same physics. Mouse World continuously follows your pointer during aimed attacks."})
+    powers:Dropdown({Title = "Aim mode", Icon = "crosshair", Options = {"Mouse World", "Selected Player", "Forward"}, Value = "Mouse World", Callback = function(value) state.aimMode = value end})
+    powers:Slider({Title = "Aim range", Min = 60, Max = 300, Increment = 10, Value = 180, Callback = function(value) state.aimDistance = value end})
+    powers:Slider({Title = "Destruction radius", Min = 12, Max = 80, Increment = 2, Value = 42, Callback = function(value) state.destructionRadius = value end})
+    powers:Slider({Title = "Blast force", Min = 100, Max = 420, Increment = 10, Value = 285, Callback = function(value) state.destructionForce = value end})
+    powers:Button({Title = "Atomic Breath", Desc = "Charge formation followed by a long aimed debris beam.", Icon = "flame", Callback = function() beginShot("Atomic Breath", 2.8) end})
     powers:Button({Title = "Meteor Rain", Desc = "A collidable meteor grid falls onto the target.", Icon = "cloud-lightning", Callback = function() beginShot("Meteor Rain", 3.0) end})
     powers:Button({Title = "Singularity Collapse", Desc = "Crushes debris inward, then detonates it.", Icon = "circle-dot", Callback = function() beginShot("Singularity", 2.4) end})
     powers:Button({Title = "Kaiju Stomp", Desc = "Low radial blast for players and structures.", Icon = "footprints", Callback = function() beginShot("Kaiju Stomp", 1.5) end})
     powers:Button({Title = "Expanding Shockwave", Icon = "radio-tower", Callback = function() beginShot("Shockwave", 1.35) end})
     powers:Button({Title = "Comet Volley", Icon = "rocket", Callback = function() beginShot("Comet", 1.8) end})
+    powers:Button({Title = "Demolition Pulse", Desc = "Blasts nearby loose, network-owned assemblies away from the aim point. Anchored map geometry cannot be deleted client-side.", Icon = "bomb", Callback = function() beginShot("Demolition Pulse", 1.1) end})
     powers:Button({Title = "Emergency stop", Icon = "octagon-x", Callback = stopAll})
 
     local defense = window:Tab("defense", "Defense", "shield")
     defense:Paragraph({Title = "Layered survival", Desc = "Health repair, ForceField, state protection, impact clamping, and last-grounded-position rescue."})
     defense:Toggle({Title = "Damage shield", Icon = "heart-pulse", Value = true, Callback = function(value) state.invulnerable = value; if value then deps.Defense.heal(ctx) end end})
     defense:Toggle({Title = "Anti-fling", Icon = "anchor", Value = true, Callback = function(value) state.antiFling = value end})
+    defense:Toggle({Title = "No collision with controlled debris", Desc = "Creates local physics constraints between your avatar and every controlled assembly, while keeping debris collidable for everyone else.", Icon = "shield", Value = true, Callback = function(value)
+        state.selfNoCollide = value
+        deps.Defense.refreshCollisionGuards(ctx)
+    end})
     defense:Toggle({Title = "Anti-fall impact", Icon = "umbrella", Value = true, Callback = function(value) state.antiFall = value end})
     defense:Toggle({Title = "Void recovery", Icon = "rotate-ccw", Value = true, Callback = function(value) state.autoRecover = value end})
     defense:Button({Title = "Save current position", Icon = "map-pin", Callback = function() deps.Defense.savePosition(ctx) end})
@@ -220,6 +284,9 @@ function Main.start(deps, liveState)
     avatar:Button({Title = "Protected launch", Desc = "Anti-fall catches the landing.", Icon = "arrow-up", Callback = function() deps.Avatar.launch(ctx) end})
 
     local server = window:Tab("server", "Server", "server-cog")
+    server:Paragraph({Title = "Authorized disaster control", Desc = "Uses the private server's enabled Gameplay Control setting. The chosen disaster is applied by the server for the next round."})
+    server:Dropdown({Title = "Next disaster", Options = {"Avalanche", "Volcanic Eruption", "Deadly Virus", "Tsunami", "Tornado", "Thunder Storm", "Sandstorm", "Meteor Shower", "Flash Flood", "Fire", "Earthquake", "Blizzard", "Acid Rain"}, Value = "Earthquake", Callback = function(value) state.nextDisaster = value end})
+    server:Button({Title = "Set next disaster", Callback = function() remotes.Round:FireServer("Set Disaster", state.nextDisaster) end})
     server:Button({Title = "Pause round", Callback = function() remotes.Round:FireServer("Pause") end})
     server:Button({Title = "Resume round", Callback = function() remotes.Round:FireServer("Resume") end})
 
@@ -254,12 +321,24 @@ function Main.start(deps, liveState)
         local now = os.clock()
         local localRoot = characterRoot(player)
 
+        if localRoot then
+            local nextAim = rawAimPoint()
+            state.aimPoint = state.aimPoint and state.aimPoint:Lerp(nextAim, math.clamp(dt * 12, 0, 1)) or nextAim
+            if state.oneShot and (state.oneShot.kind == "Atomic Breath" or state.oneShot.kind == "Comet") then
+                state.oneShot.aimPoint = state.aimPoint
+            end
+        end
+
         if now - state.lastSimBoost >= 0.5 then
             state.lastSimBoost = now
             pcall(sethiddenproperty, player, "MaximumSimulationRadius", deps.Config.SimulationRadius)
             pcall(sethiddenproperty, player, "SimulationRadius", deps.Config.SimulationRadius)
         end
         if now - state.lastScan >= deps.Config.ScanInterval then state.lastScan = now; refreshOwned() end
+        if now - state.lastCollisionRefresh >= 2 then
+            state.lastCollisionRefresh = now
+            deps.Defense.refreshCollisionGuards(ctx)
+        end
         if now - lastPlayerRefresh >= 3 then lastPlayerRefresh = now; targetDropdown:SetOptions(playerOptions()) end
 
         deps.Avatar.tick(ctx, now)
@@ -287,15 +366,26 @@ function Main.start(deps, liveState)
                     velocity = deps.Patterns.attack(root, index, count, now, localRoot, targetRoot, state.oneShot)
                 elseif state.constructEnabled then
                     local goal, tangent = deps.Patterns.construct(state.construct, index, count, now, localRoot, targetRoot, state)
-                    local raw = (goal - root.Position) * (state.strength + 3) + tangent
+                    local raw = (goal - root.Position) * (state.strength + 3) - root.AssemblyLinearVelocity * 0.75 + tangent
                     velocity = raw.Magnitude > 300 and raw.Unit * 300 or raw
                 else
                     local goal, tangent = deps.Patterns.continuous(state.mode, index, count, now, localRoot, targetRoot, viewers, state)
                     local raw = (goal - root.Position) * state.strength + tangent
                     velocity = raw.Magnitude > 285 and raw.Unit * 285 or raw
                 end
-                root.AssemblyLinearVelocity = velocity
-                root.AssemblyAngularVelocity = Vector3.new(10 + index % 5 * 3, 17, 8 + index % 7)
+                if state.selfNoCollide then
+                    local separation = root.Position - localRoot.Position
+                    if separation.Magnitude < 11 then
+                        local away = separation.Magnitude > 0.2 and separation.Unit or localRoot.CFrame.LookVector
+                        velocity = away * 190 + Vector3.new(0, 55, 0)
+                    end
+                end
+                if velocity then root.AssemblyLinearVelocity = velocity end
+                if state.constructEnabled and not state.oneShot then
+                    root.AssemblyAngularVelocity = Vector3.zero
+                elseif velocity then
+                    root.AssemblyAngularVelocity = Vector3.new(10 + index % 5 * 3, 17, 8 + index % 7)
+                end
             end
         end
 

@@ -4,7 +4,7 @@ The hub is intentionally modular:
 
 - `Loader.lua` — tiny remote bootstrap and reload-safe lifecycle.
 - `Main.lua` — orchestration, UI wiring, targeting, and optimized ownership scans.
-- `PhysicsPatterns.lua` — continuous formations, debris sculptures, and cinematic attacks.
+- `PhysicsPatterns.lua` — continuous formations, stable debris forms, aimed attacks, and demolition pulses.
 - `Defense.lua` — health repair, impact resistance, and void recovery.
 - `Avatar.lua` — replicated cyclone, launch, and flight movement.
 - `Config.lua` — shared performance and version settings.

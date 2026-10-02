@@ -17,8 +17,55 @@ function Defense.clearConnections(ctx)
     table.clear(ctx.state.defenseConnections)
 end
 
+function Defense.clearCollisionGuards(ctx)
+    for _, constraint in ipairs(ctx.state.collisionGuards or {}) do
+        pcall(function() constraint:Destroy() end)
+    end
+    table.clear(ctx.state.collisionGuards)
+end
+
+function Defense.refreshCollisionGuards(ctx)
+    Defense.clearCollisionGuards(ctx)
+    if not ctx.state.selfNoCollide then return end
+    local character = ctx.player.Character
+    if not character then return end
+
+    local characterParts = {}
+    for _, object in ipairs(character:GetDescendants()) do
+        if object:IsA("BasePart") then table.insert(characterParts, object) end
+    end
+
+    local debrisParts, seen = {}, {}
+    for _, assemblyRoot in ipairs(ctx.state.controlled) do
+        if assemblyRoot and assemblyRoot.Parent then
+            local connected = assemblyRoot:GetConnectedParts(true)
+            table.insert(connected, assemblyRoot)
+            for _, object in ipairs(connected) do
+                if object:IsA("BasePart") and not seen[object] then
+                    seen[object] = true
+                    table.insert(debrisParts, object)
+                    if #debrisParts >= 180 then break end
+                end
+            end
+        end
+        if #debrisParts >= 180 then break end
+    end
+
+    for _, debris in ipairs(debrisParts) do
+        for _, bodyPart in ipairs(characterParts) do
+            local constraint = Instance.new("NoCollisionConstraint")
+            constraint.Name = "NDSFunLab_NoSelfCollision"
+            constraint.Part0 = debris
+            constraint.Part1 = bodyPart
+            constraint.Parent = character
+            table.insert(ctx.state.collisionGuards, constraint)
+        end
+    end
+end
+
 function Defense.install(ctx, character)
     Defense.clearConnections(ctx)
+    Defense.clearCollisionGuards(ctx)
     if ctx.state.forceField then
         pcall(function() ctx.state.forceField:Destroy() end)
         ctx.state.forceField = nil
@@ -120,6 +167,7 @@ end
 
 function Defense.cleanup(ctx)
     Defense.clearConnections(ctx)
+    Defense.clearCollisionGuards(ctx)
     if ctx.state.forceField then
         pcall(function() ctx.state.forceField:Destroy() end)
         ctx.state.forceField = nil
