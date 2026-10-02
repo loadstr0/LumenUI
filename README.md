@@ -8,9 +8,10 @@ A dark, monochrome Roblox UI library — window chrome, tabs, form elements, dia
 - **Elements** — `Paragraph`, `Button`, `Toggle`, `Section` + `Card` (icon grid), `Slider`, `Keybind`, `Dropdown` (with optional multi-select), `Input`, `Divider`, `ColorPicker`, `ProgressBar`.
 - **Confirm** — a blocking confirmation dialog (`title`, `content`, `callback`).
 - **Notify** — dismissible toast notifications with icon + auto-dismiss duration, same background as the main window (not a flat color fill), fading and sliding in/out. Multiple toasts stack newest-on-top and animate to a new slot whenever one is added or dismissed, instead of snapping.
-- **Config** — tag any stateful element with a `Flag` and save/load its value to disk with `window:SaveConfig`/`window:LoadConfig`, so a hub's settings survive a script restart. `Window.new({ AutoSaveConfig = name })` saves automatically whenever the window is destroyed (including the automatic cleanup on reload), so nothing is lost even if you forget to call `SaveConfig` yourself.
+- **Config** — tag any stateful element with a `Flag` and save/load its value to disk with `window:SaveConfig`/`window:LoadConfig`, so a hub's settings survive a script restart. `Window.new({ AutoSaveConfig = name })` checkpoints changed flags in the background and saves once more when the window is destroyed (including automatic cleanup on reload), so it also survives rejoins where Roblox never runs a clean destroy callback.
 - **Icons** — built-in [Lucide](https://lucide.dev) icon resolver (`Helpers.icon` / `Helpers.withIcon`), used by name (`"home"`, `"settings"`, …) with automatic fallback for unknown names.
 - **Theme** — a single module of colors, fonts, corner radii, and `TweenInfo` presets; override any field to reskin the whole library.
+- **Input-safe tab transitions** — outgoing pages stop accepting input immediately and are hidden after their animation, so invisible controls never block or activate controls on the current tab.
 
 Every animation (shimmer hover, halo hover, panel open/close, page-switch slide, content fade) is driven from `Theme.Tweens`, so retiming the whole library is a one-file change.
 
@@ -35,7 +36,8 @@ local window = Window.new({
     Title = "My Hub",
     Size = UDim2.fromOffset(620, 470), -- optional
     ToggleKeybind = Enum.KeyCode.RightControl, -- optional
-    AutoSaveConfig = "default", -- optional: saves every Flag automatically when this window is destroyed
+    AutoSaveConfig = "default", -- optional: checkpoints changed Flags and saves again on destroy
+    AutoSaveInterval = 0.5, -- optional: seconds between change checks (minimum 0.1)
 })
 
 local home = window:Tab("home", "Home", "home") -- id, title, Lucide icon name
@@ -175,7 +177,7 @@ section:Card({
 -- saved and restored together. Load fires each element's real Callback, so restoring a config
 -- actually re-applies its effects, not just the widget's displayed value. Call this once all
 -- your Flag elements exist - AutoSaveConfig above means you don't need a matching SaveConfig
--- call; it happens on its own whenever this window is destroyed (including on reload).
+-- call; changed values are checkpointed in the background and once more on destroy/reload.
 window:LoadConfig("default")
 -- window:ListConfigs() -- { "default" }
 -- window:DeleteConfig("default")
@@ -187,7 +189,7 @@ window:LoadConfig("default")
 
 | Method | Description |
 |---|---|
-| `Window.new(options)` | Creates a window. `options`: `Name`, `Title`, `Size` (`UDim2`), `ToggleKeybind` (`Enum.KeyCode`), `AutoSaveConfig` (string, optional — config name to save every `Flag`-tagged element to whenever this window is destroyed, including the automatic cleanup on reload). |
+| `Window.new(options)` | Creates a window. `options`: `Name`, `Title`, `Size` (`UDim2`), `ToggleKeybind` (`Enum.KeyCode`), `Visible` (boolean, optional), `VisibilityChanged(visible)` (callback, optional), `AutoSaveConfig` (string, optional — config name used for background checkpoints and the final destroy/reload save), `AutoSaveInterval` (number, optional — seconds between change checks, default `0.5`, minimum `0.1`). |
 | `window:Tab(id, title, icon)` | Creates (or returns the existing) tab. `icon` is a Lucide icon name. First tab created becomes active automatically. |
 | `window:GoTo(id)` | Switches to a tab by id. |
 | `window:SetVisible(visible)` | Shows/hides the whole window (animated). |

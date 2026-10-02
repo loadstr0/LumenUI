@@ -2520,8 +2520,12 @@ local HttpService = game:GetService("HttpService")
 
 local Config = {}
 
+local function configRoot(window)
+return window.ScreenGui.Name or "LumenUI"
+end
+
 local function configFolder(window)
-return (window.ScreenGui.Name or "LumenUI") .. "/Configs"
+return configRoot(window) .. "/Configs"
 end
 
 local function configPath(window, name)
@@ -2534,7 +2538,11 @@ return { __type = "Color3", Hex = value:ToHex() }
 end,
 EnumItem = function(value)
 
-return { __type = "EnumItem", EnumType = tostring(value.EnumType), Name = value.Name }
+return {
+__type = "EnumItem",
+EnumType = tostring(value.EnumType):gsub("^Enum%.", ""),
+Name = value.Name,
+}
 end,
 }
 
@@ -2558,18 +2566,49 @@ end
 return value
 end
 
+local function capture(window)
+local rows = {}
+for flag, entry in pairs(window.Flags) do
+table.insert(rows, {
+Flag = tostring(flag),
+Value = serialize(entry.Get()),
+})
+end
+table.sort(rows, function(a, b)
+return a.Flag < b.Flag
+end)
+
+local data = {}
+for _, row in ipairs(rows) do
+data[row.Flag] = row.Value
+end
+return data, HttpService:JSONEncode(rows)
+end
+
+function Config.Signature(window)
+local ok, signature = pcall(function()
+local _, value = capture(window)
+return value
+end)
+if not ok then
+return false, tostring(signature)
+end
+return true, signature
+end
+
 function Config.Save(window, name)
 if type(name) ~= "string" or name == "" then
 return false, "config name must be a non-empty string"
 end
 local ok, err = pcall(function()
+
+if not isfolder(configRoot(window)) then
+makefolder(configRoot(window))
+end
 if not isfolder(configFolder(window)) then
 makefolder(configFolder(window))
 end
-local data = {}
-for flag, entry in pairs(window.Flags) do
-data[flag] = serialize(entry.Get())
-end
+local data = capture(window)
 writefile(configPath(window, name), HttpService:JSONEncode(data))
 end)
 if not ok then
@@ -2761,9 +2800,12 @@ local ok, previous = pcall(function()
 return getgenv().LumenUIActiveWindow
 end)
 if ok and previous and type(previous.Destroy) == "function" then
-pcall(function()
+local destroyed, destroyError = pcall(function()
 previous:Destroy()
 end)
+if not destroyed then
+warn("[LumenUI] Previous window cleanup failed: " .. tostring(destroyError))
+end
 end
 end
 
@@ -3105,6 +3147,12 @@ Connections = {},
 Flags = {},
 
 AutoSaveConfigName = options.AutoSaveConfig,
+
+AutoSaveInterval = math.max(tonumber(options.AutoSaveInterval) or 0.5, 0.1),
+_AutoSaveSignature = nil,
+_AutoSaveToken = nil,
+_AutoSaveWarnedError = nil,
+LastConfigSaveError = nil,
 }, Window)
 
 self:_wireChrome(handle, controls, resizeButton, resizeDisabled, fullscreenButton, fullscreenIcon, resizeHandle, menuButton, menuBackdrop, layer, maxSize)
@@ -3133,6 +3181,16 @@ pcall(function()
 getgenv().LumenUIActiveWindow = self
 end)
 
+if self.AutoSaveConfigName then
+
+self:_track(screenGui.Destroying:Connect(function()
+if not self.Destroyed then
+self:_autoSaveConfig(true)
+end
+end))
+self:_startAutoSave()
+end
+
 return self
 end
 
@@ -3146,6 +3204,62 @@ if self.Flags[flag] then
 warn("[LumenUI] Duplicate Flag \"" .. tostring(flag) .. "\" - the earlier element with this flag will be shadowed by config save/load.")
 end
 self.Flags[flag] = entry
+end
+
+function Window:_reportAutoSaveError(err)
+err = tostring(err)
+self.LastConfigSaveError = err
+if self._AutoSaveWarnedError ~= err then
+self._AutoSaveWarnedError = err
+warn("[LumenUI] Auto-save failed for \"" .. tostring(self.AutoSaveConfigName) .. "\": " .. err)
+end
+end
+
+function Window:_autoSaveConfig(force)
+if not self.AutoSaveConfigName then
+return true, "disabled"
+end
+
+local configOk, Config = pcall(function()
+return ctx:Require("Config")
+end)
+if not configOk then
+self:_reportAutoSaveError(Config)
+return false, tostring(Config)
+end
+
+local signatureOk, signature = Config.Signature(self)
+if not signatureOk then
+self:_reportAutoSaveError(signature)
+return false, signature
+end
+if not force and signature == self._AutoSaveSignature then
+return true, "unchanged"
+end
+
+local saveOk, saveError = Config.Save(self, self.AutoSaveConfigName)
+if not saveOk then
+self:_reportAutoSaveError(saveError)
+return false, saveError
+end
+
+self._AutoSaveSignature = signature
+self._AutoSaveWarnedError = nil
+self.LastConfigSaveError = nil
+return true
+end
+
+function Window:_startAutoSave()
+local token = {}
+self._AutoSaveToken = token
+task.spawn(function()
+while self._AutoSaveToken == token and not self.Destroyed do
+task.wait(self.AutoSaveInterval)
+if self._AutoSaveToken == token and not self.Destroyed then
+self:_autoSaveConfig(false)
+end
+end
+end)
 end
 
 function Window:_wireChrome(handle, controls, resizeButton, resizeDisabled, fullscreenButton, fullscreenIcon, resizeHandle, menuButton, menuBackdrop, layer, maxSize)
@@ -3289,15 +3403,24 @@ self.ActiveTab = tab
 self.TabLabel.Text = tab.Title or ""
 
 if previous then
+
+previous.CanvasGroup.Interactable = false
 TweenService:Create(previous.CanvasGroup, Theme.Tweens.PageSwitch, {
 Position = UDim2.new(0.5, 0, 1.2, 0),
 GroupTransparency = 1,
 }):Play()
+local outgoing = previous
+task.delay(Theme.Tweens.PageSwitch.Time, function()
+if not self.Destroyed and self.ActiveTab ~= outgoing then
+outgoing.CanvasGroup.Visible = false
+end
+end)
 end
 
 tab.CanvasGroup.Position = UDim2.new(0.5, 0, 1.2, 0)
 tab.CanvasGroup.GroupTransparency = 1
 tab.CanvasGroup.Visible = true
+tab.CanvasGroup.Interactable = true
 TweenService:Create(tab.CanvasGroup, Theme.Tweens.PageSwitch, {
 Position = UDim2.new(0.5, 0, 0.5, 0),
 GroupTransparency = 0,
@@ -3340,6 +3463,7 @@ local canvasGroup = new("CanvasGroup", {
 Name = "canvas_" .. id,
 BackgroundTransparency = 1,
 Visible = false,
+Interactable = false,
 Size = UDim2.fromScale(1, 1),
 AnchorPoint = Vector2.new(0.5, 0.5),
 Position = UDim2.new(0.5, 0, 1.2, 0),
@@ -3471,11 +3595,25 @@ return ctx:Require("Confirm").Show(self, ...)
 end
 
 function Window:SaveConfig(name)
-return ctx:Require("Config").Save(self, name)
+local ok, err = ctx:Require("Config").Save(self, name)
+if ok and name == self.AutoSaveConfigName then
+local signatureOk, signature = ctx:Require("Config").Signature(self)
+if signatureOk then
+self._AutoSaveSignature = signature
+end
+end
+return ok, err
 end
 
 function Window:LoadConfig(name)
-return ctx:Require("Config").Load(self, name)
+local ok, err = ctx:Require("Config").Load(self, name)
+if ok and name == self.AutoSaveConfigName then
+local signatureOk, signature = ctx:Require("Config").Signature(self)
+if signatureOk then
+self._AutoSaveSignature = signature
+end
+end
+return ok, err
 end
 
 function Window:ListConfigs()
@@ -3491,11 +3629,8 @@ if self.Destroyed then
 return
 end
 
-if self.AutoSaveConfigName then
-pcall(function()
-ctx:Require("Config").Save(self, self.AutoSaveConfigName)
-end)
-end
+local saveOk, saveError = self:_autoSaveConfig(true)
+self._AutoSaveToken = nil
 self.Destroyed = true
 for _, connection in ipairs(self.Connections) do
 pcall(function()
@@ -3510,6 +3645,7 @@ end
 end)
 self.Shadow:Destroy()
 self.ScreenGui:Destroy()
+return saveOk, saveError
 end
 
 return Window
