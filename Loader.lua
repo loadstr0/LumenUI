@@ -2640,6 +2640,23 @@ end
 return true
 end
 
+function Config.SavedValue(window, name, flag)
+if window._SavedConfigData == nil then
+window._SavedConfigData = false
+pcall(function()
+local path = configPath(window, name)
+if isfile(path) then
+window._SavedConfigData = HttpService:JSONDecode(readfile(path))
+end
+end)
+end
+local data = window._SavedConfigData
+if type(data) ~= "table" or data[flag] == nil then
+return nil
+end
+return deserialize(data[flag])
+end
+
 function Config.List(window)
 local folder = configFolder(window)
 local ok, files = pcall(function()
@@ -3204,6 +3221,15 @@ if self.Flags[flag] then
 warn("[LumenUI] Duplicate Flag \"" .. tostring(flag) .. "\" - the earlier element with this flag will be shadowed by config save/load.")
 end
 self.Flags[flag] = entry
+if self.AutoSaveConfigName and entry.Load then
+local value = ctx:Require("Config").SavedValue(self, self.AutoSaveConfigName, flag)
+if value ~= nil then
+local ok, err = pcall(entry.Load, value)
+if not ok then
+warn("[LumenUI] Could not restore saved Flag \"" .. tostring(flag) .. "\": " .. tostring(err))
+end
+end
+end
 end
 
 function Window:_reportAutoSaveError(err)
